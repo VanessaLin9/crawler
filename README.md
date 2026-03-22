@@ -64,6 +64,15 @@ crawl-site cake "後端" \
   --google-service-account "secrets/google-service-account.json"
 ```
 
+如果要因應欄位 schema 變更重建工作表：
+
+```bash
+crawl-site cake "後端" \
+  --max-pages 3 \
+  --sync-google-sheet \
+  --reset-google-sheet
+```
+
 也可以改用環境變數：
 
 ```bash
@@ -90,6 +99,24 @@ crawl-site cake "後端" --max-pages 3 --sync-google-sheet
 - `links`
 
 同步到 Google Sheets 時，會先將 `matches` flatten 成「一職缺一列」，並以 `job_url` 去重，只有不存在於表單的職缺才會 append。
+
+目前同步到表單的主要欄位包含：
+
+- `job_url`
+- `title`
+- `company_name`
+- `location`
+- `salary_min`
+- `salary_max`
+- `salary_currency`
+- `salary_type`
+- `salary_display`
+- `openings_count`
+- `employment_type`
+- `seniority_level`
+- `experience_required_years`
+- `management_responsibility`
+- `tags`
 
 ## 專案結構
 

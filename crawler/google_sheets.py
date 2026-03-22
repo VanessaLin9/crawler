@@ -23,9 +23,12 @@ def sync_job_records(
     spreadsheet_id: str,
     sheet_name: str,
     service_account_path: str,
+    reset_sheet: bool = False,
 ) -> SheetSyncResult:
     service = _build_sheets_service(service_account_path)
     _ensure_sheet_exists(service, spreadsheet_id, sheet_name)
+    if reset_sheet:
+        _clear_sheet(service, spreadsheet_id, sheet_name)
     _ensure_header_row(service, spreadsheet_id, sheet_name)
     existing_urls = _fetch_existing_job_urls(service, spreadsheet_id, sheet_name)
 
@@ -131,6 +134,11 @@ def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> None:
             "Create an empty sheet or add a header containing 'job_url'."
         )
 
+    raise ValueError(
+        f"Sheet '{sheet_name}' header does not match the current schema. "
+        "Use --reset-google-sheet once to rebuild the worksheet with the new columns."
+    )
+
 
 def _fetch_existing_job_urls(
     service,
@@ -168,6 +176,19 @@ def _append_rows(
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body={"values": rows},
+        )
+        .execute()
+    )
+
+
+def _clear_sheet(service, spreadsheet_id: str, sheet_name: str) -> None:
+    (
+        service.spreadsheets()
+        .values()
+        .clear(
+            spreadsheetId=spreadsheet_id,
+            range=f"{sheet_name}!A:ZZ",
+            body={},
         )
         .execute()
     )

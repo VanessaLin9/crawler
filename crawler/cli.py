@@ -38,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
             DEFAULT_GOOGLE_SERVICE_ACCOUNT,
         ),
     )
+    parser.add_argument("--reset-google-sheet", action="store_true")
     return parser
 
 
@@ -76,6 +77,7 @@ def main() -> None:
             spreadsheet_id=args.google_sheet_id,
             sheet_name=args.google_sheet_name,
             service_account_path=args.google_service_account,
+            reset_sheet=args.reset_google_sheet,
         )
         print(
             f"Synced {sync_result.appended_count} new rows to "

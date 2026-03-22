@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote, urlparse
@@ -217,16 +219,18 @@ class CakeItJobsAdapter(SiteAdapter):
 
     def parse_page(self, url: str, html: str, keyword: str) -> ParsedPage:
         document = parse_html_document(url, html)
-        parser = _CakeJobCardParser(base_url=url)
-        parser.feed(html)
-        parser.close()
         search_terms = _expand_search_terms(keyword)
+        matches = _parse_structured_job_matches(url, html, search_terms)
 
-        matches = [
-            _job_to_match(job, keyword, search_terms)
-            for job in parser.jobs
-            if _job_matches_keyword(job, search_terms)
-        ]
+        if not matches:
+            parser = _CakeJobCardParser(base_url=url)
+            parser.feed(html)
+            parser.close()
+            matches = [
+                _job_to_match(job, keyword, search_terms)
+                for job in parser.jobs
+                if _job_matches_keyword(job, search_terms)
+            ]
 
         return ParsedPage(
             title=document.title,
@@ -280,6 +284,19 @@ def _job_to_match(job: _CakeJobCard, keyword: str, search_terms: list[str]) -> d
         "summary": job.summary[:400],
         "matched_fields": matched_fields,
         "matched_terms": _dedupe_preserve_order(matched_terms),
+        "location": "",
+        "salary_min": "",
+        "salary_max": "",
+        "salary_currency": "",
+        "salary_type": "",
+        "salary_display": "",
+        "openings_count": "",
+        "employment_type": "",
+        "seniority_level": "",
+        "experience_required_years": "",
+        "management_responsibility": "",
+        "tags": "",
+        "content_updated_at": "",
     }
 
 
@@ -309,3 +326,194 @@ def _find_matching_terms(text: str, search_terms: list[str]) -> list[str]:
 
 def _dedupe_preserve_order(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
+
+
+def _parse_structured_job_matches(
+    url: str,
+    html: str,
+    search_terms: list[str],
+) -> list[dict]:
+    next_data = _extract_next_data(html)
+    if not next_data:
+        return []
+
+    job_search = (
+        next_data.get("props", {})
+        .get("pageProps", {})
+        .get("initialState", {})
+        .get("jobSearch", {})
+    )
+    if not job_search:
+        return []
+
+    active_filter_key = job_search.get("activeFilterKey")
+    view = job_search.get("viewsByFilterKey", {}).get(active_filter_key, {})
+    page_map = view.get("pageMap", {})
+    entity_by_path_id = job_search.get("entityByPathId", {})
+    current_page = _extract_page_number(url)
+    page_entities = page_map.get(str(current_page), [])
+
+    matches: list[dict] = []
+    for path_id in page_entities:
+        entity = entity_by_path_id.get(path_id)
+        if not entity:
+            continue
+        if not _structured_entity_matches(entity, search_terms):
+            continue
+        matches.append(_structured_entity_to_match(entity, search_terms))
+    return matches
+
+
+def _extract_next_data(html: str) -> dict | None:
+    match = re.search(
+        r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+
+
+def _extract_page_number(url: str) -> int:
+    parsed = urlparse(url)
+    query = parse_qs(parsed.query)
+    page_values = query.get("page", [])
+    if page_values and page_values[0].isdigit():
+        return int(page_values[0])
+    return 1
+
+
+def _structured_entity_matches(entity: dict, search_terms: list[str]) -> bool:
+    texts = [
+        entity.get("title", ""),
+        entity.get("page", {}).get("name", ""),
+        entity.get("description", ""),
+        " ".join(entity.get("tags", [])),
+    ]
+    haystack = " ".join(texts)
+    return bool(_find_matching_terms(haystack, search_terms))
+
+
+def _structured_entity_to_match(entity: dict, search_terms: list[str]) -> dict:
+    title = entity.get("title", "")
+    company_name = entity.get("page", {}).get("name", "")
+    company_path = entity.get("page", {}).get("path", "")
+    job_path = entity.get("path", "")
+    description = entity.get("description", "").strip()
+    tags = entity.get("tags", [])
+    locations = entity.get("locations", [])
+    salary = entity.get("salary", {}) or {}
+
+    title_hit_terms = _find_matching_terms(title, search_terms)
+    company_hit_terms = _find_matching_terms(company_name, search_terms)
+    description_hit_terms = _find_matching_terms(description, search_terms)
+    tag_hit_terms = _find_matching_terms(" ".join(tags), search_terms)
+    matched_fields: list[str] = []
+    matched_terms: list[str] = []
+
+    if title_hit_terms:
+        matched_fields.append("title")
+        matched_terms.extend(title_hit_terms)
+    if company_hit_terms:
+        matched_fields.append("company_name")
+        matched_terms.extend(company_hit_terms)
+    if description_hit_terms:
+        matched_fields.append("summary")
+        matched_terms.extend(description_hit_terms)
+    if tag_hit_terms:
+        matched_fields.append("tags")
+        matched_terms.extend(tag_hit_terms)
+
+    salary_min = _stringify_optional(salary.get("min"))
+    salary_max = _stringify_optional(salary.get("max"))
+    salary_currency = _stringify_optional(salary.get("currency"))
+    salary_type = _stringify_optional(salary.get("type"))
+
+    return {
+        "type": "job_card",
+        "title": title,
+        "company_name": company_name,
+        "job_url": _build_cake_job_url(company_path, job_path),
+        "company_url": _build_cake_company_url(company_path),
+        "summary": description,
+        "matched_fields": matched_fields,
+        "matched_terms": _dedupe_preserve_order(matched_terms),
+        "location": locations[0] if locations else "",
+        "salary_min": salary_min,
+        "salary_max": salary_max,
+        "salary_currency": salary_currency,
+        "salary_type": salary_type,
+        "salary_display": _format_salary_display(
+            salary_min,
+            salary_max,
+            salary_currency,
+            salary_type,
+        ),
+        "openings_count": _stringify_optional(entity.get("numberOfOpenings")),
+        "employment_type": _normalize_enum_label(entity.get("jobType")),
+        "seniority_level": _normalize_enum_label(entity.get("seniorityLevel")),
+        "experience_required_years": _stringify_optional(entity.get("minWorkExpYear")),
+        "management_responsibility": _normalize_enum_label(
+            entity.get("numberOfManagement")
+        ),
+        "tags": ", ".join(tags),
+        "content_updated_at": entity.get("contentUpdatedAt", ""),
+    }
+
+
+def _build_cake_job_url(company_path: str, job_path: str) -> str:
+    return f"https://www.cake.me/companies/{company_path}/jobs/{job_path}"
+
+
+def _build_cake_company_url(company_path: str) -> str:
+    return f"https://www.cake.me/companies/{company_path}"
+
+
+def _stringify_optional(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value)
+
+
+def _normalize_enum_label(value: str | None) -> str:
+    if not value:
+        return ""
+    mapping = {
+        "full_time": "full_time",
+        "part_time": "part_time",
+        "contract": "contract",
+        "internship": "internship",
+        "temporary": "temporary",
+        "entry_level": "entry_level",
+        "mid_senior_level": "mid_senior_level",
+        "associate": "associate",
+        "director": "director",
+        "internship_level": "internship_level",
+        "none": "none",
+    }
+    return mapping.get(value, value)
+
+
+def _format_salary_display(
+    salary_min: str,
+    salary_max: str,
+    salary_currency: str,
+    salary_type: str,
+) -> str:
+    if not (salary_min or salary_max):
+        return ""
+
+    range_display = salary_min
+    if salary_max:
+        range_display = f"{salary_min} - {salary_max}" if salary_min else salary_max
+
+    parts = [range_display]
+    if salary_currency:
+        parts.append(salary_currency)
+    if salary_type:
+        parts.append(salary_type)
+    return " ".join(part for part in parts if part)

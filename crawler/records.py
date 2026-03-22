@@ -10,11 +10,24 @@ SHEET_COLUMNS = [
     "company_name",
     "company_url",
     "keyword",
+    "location",
+    "salary_min",
+    "salary_max",
+    "salary_currency",
+    "salary_type",
+    "salary_display",
+    "openings_count",
+    "employment_type",
+    "seniority_level",
+    "experience_required_years",
+    "management_responsibility",
+    "tags",
     "matched_fields",
     "matched_terms",
     "summary",
     "source_site",
     "search_page_url",
+    "content_updated_at",
     "discovered_at",
 ]
 
@@ -26,11 +39,24 @@ class JobRecord:
     company_name: str
     company_url: str
     keyword: str
+    location: str
+    salary_min: str
+    salary_max: str
+    salary_currency: str
+    salary_type: str
+    salary_display: str
+    openings_count: str
+    employment_type: str
+    seniority_level: str
+    experience_required_years: str
+    management_responsibility: str
+    tags: str
     matched_fields: list[str]
     matched_terms: list[str]
     summary: str
     source_site: str
     search_page_url: str
+    content_updated_at: str
     discovered_at: str
 
     def to_sheet_row(self) -> list[str]:
@@ -40,11 +66,24 @@ class JobRecord:
             self.company_name,
             self.company_url,
             self.keyword,
+            self.location,
+            self.salary_min,
+            self.salary_max,
+            self.salary_currency,
+            self.salary_type,
+            self.salary_display,
+            self.openings_count,
+            self.employment_type,
+            self.seniority_level,
+            self.experience_required_years,
+            self.management_responsibility,
+            self.tags,
             ", ".join(self.matched_fields),
             ", ".join(self.matched_terms),
             self.summary,
             self.source_site,
             self.search_page_url,
+            self.content_updated_at,
             self.discovered_at,
         ]
 
@@ -85,11 +124,24 @@ def flatten_job_records(
                 company_name=match.get("company_name", ""),
                 company_url=match.get("company_url", ""),
                 keyword=keyword,
+                location=match.get("location", ""),
+                salary_min=match.get("salary_min", ""),
+                salary_max=match.get("salary_max", ""),
+                salary_currency=match.get("salary_currency", ""),
+                salary_type=match.get("salary_type", ""),
+                salary_display=match.get("salary_display", ""),
+                openings_count=match.get("openings_count", ""),
+                employment_type=match.get("employment_type", ""),
+                seniority_level=match.get("seniority_level", ""),
+                experience_required_years=match.get("experience_required_years", ""),
+                management_responsibility=match.get("management_responsibility", ""),
+                tags=match.get("tags", ""),
                 matched_fields=list(match.get("matched_fields", [])),
                 matched_terms=list(match.get("matched_terms", [])),
                 summary=match.get("summary", ""),
                 source_site=site,
                 search_page_url=search_page_url,
+                content_updated_at=match.get("content_updated_at", ""),
                 discovered_at=discovered_value,
             )
 
