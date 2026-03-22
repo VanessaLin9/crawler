@@ -4,14 +4,17 @@ import json
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from urllib.request import Request, urlopen
 from urllib.parse import parse_qs, quote, urlparse
 
 from crawler.parser import parse_html_document
+from crawler.settings import DEFAULT_PER_PAGE
 from crawler.sites.base import ParsedPage, SiteAdapter
 from crawler.url_utils import normalize_url
 
 CAKE_IT_JOBS_URL = "https://www.cake.me/jobs/for-it?ref=navs_job_search_it"
 CAKE_IT_JOBS_SEARCH_URL_TEMPLATE = "https://www.cake.me/jobs/{keyword}/for-it"
+CAKE_CLIENT_SEARCH_API_URL = "https://api.cake.me/api/client/v1/jobs/search"
 KEYWORD_GROUPS = [
     (
         "後端",
@@ -202,8 +205,16 @@ def _same_company(company_url: str, job_url: str) -> bool:
 class CakeItJobsAdapter(SiteAdapter):
     name = "cake"
 
-    def __init__(self, keyword: str = "") -> None:
+    def __init__(
+        self,
+        keyword: str = "",
+        per_page: int = DEFAULT_PER_PAGE,
+        use_search_api: bool = False,
+    ) -> None:
         encoded_keyword = quote(keyword.strip(), safe="")
+        self.keyword = keyword.strip()
+        self.per_page = per_page
+        self.use_search_api = use_search_api
         self.search_path = (
             f"/jobs/{encoded_keyword}/for-it" if encoded_keyword else "/jobs/for-it"
         )
@@ -220,7 +231,25 @@ class CakeItJobsAdapter(SiteAdapter):
     def parse_page(self, url: str, html: str, keyword: str) -> ParsedPage:
         document = parse_html_document(url, html)
         search_terms = _expand_search_terms(keyword)
-        matches = _parse_structured_job_matches(url, html, search_terms)
+        current_page = _extract_page_number(url)
+        api_response = (
+            _fetch_search_api_page(keyword, current_page, self.per_page)
+            if self.use_search_api
+            else None
+        )
+        links = list(document.links)
+
+        if api_response:
+            matches = _parse_api_job_matches(api_response, search_terms)
+            links.extend(
+                _build_pagination_links(
+                    keyword,
+                    current_page,
+                    api_response,
+                )
+            )
+        else:
+            matches = _parse_structured_job_matches(url, html, search_terms)
 
         if not matches:
             parser = _CakeJobCardParser(base_url=url)
@@ -235,7 +264,7 @@ class CakeItJobsAdapter(SiteAdapter):
         return ParsedPage(
             title=document.title,
             meta_description=document.meta_description,
-            links=document.links,
+            links=_dedupe_preserve_order(links),
             matches=matches,
         )
 
@@ -364,6 +393,18 @@ def _parse_structured_job_matches(
     return matches
 
 
+def _parse_api_job_matches(
+    response: dict,
+    search_terms: list[str],
+) -> list[dict]:
+    matches: list[dict] = []
+    for entity in response.get("data", []):
+        if not _structured_entity_matches(entity, search_terms):
+            continue
+        matches.append(_structured_entity_to_match(entity, search_terms))
+    return matches
+
+
 def _extract_next_data(html: str) -> dict | None:
     match = re.search(
         r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>',
@@ -389,23 +430,24 @@ def _extract_page_number(url: str) -> int:
 
 def _structured_entity_matches(entity: dict, search_terms: list[str]) -> bool:
     texts = [
-        entity.get("title", ""),
-        entity.get("page", {}).get("name", ""),
-        entity.get("description", ""),
-        " ".join(entity.get("tags", [])),
+        _get_entity_value(entity, "title"),
+        _get_entity_value(entity.get("page", {}), "name"),
+        _get_entity_value(entity, "description"),
+        " ".join(_get_entity_list(entity, "tags")),
     ]
     haystack = " ".join(texts)
     return bool(_find_matching_terms(haystack, search_terms))
 
 
 def _structured_entity_to_match(entity: dict, search_terms: list[str]) -> dict:
-    title = entity.get("title", "")
-    company_name = entity.get("page", {}).get("name", "")
-    company_path = entity.get("page", {}).get("path", "")
-    job_path = entity.get("path", "")
-    description = entity.get("description", "").strip()
-    tags = entity.get("tags", [])
-    locations = entity.get("locations", [])
+    title = _get_entity_value(entity, "title")
+    page = entity.get("page", {}) or {}
+    company_name = _get_entity_value(page, "name")
+    company_path = _get_entity_value(page, "path")
+    job_path = _get_entity_value(entity, "path")
+    description = _get_entity_value(entity, "description").strip()
+    tags = _get_entity_list(entity, "tags")
+    locations = _get_entity_list(entity, "locations")
     salary = entity.get("salary", {}) or {}
 
     title_hit_terms = _find_matching_terms(title, search_terms)
@@ -428,10 +470,10 @@ def _structured_entity_to_match(entity: dict, search_terms: list[str]) -> dict:
         matched_fields.append("tags")
         matched_terms.extend(tag_hit_terms)
 
-    salary_min = _stringify_optional(salary.get("min"))
-    salary_max = _stringify_optional(salary.get("max"))
-    salary_currency = _stringify_optional(salary.get("currency"))
-    salary_type = _stringify_optional(salary.get("type"))
+    salary_min = _stringify_optional(_get_entity_value(salary, "min"))
+    salary_max = _stringify_optional(_get_entity_value(salary, "max"))
+    salary_currency = _stringify_optional(_get_entity_value(salary, "currency"))
+    salary_type = _stringify_optional(_get_entity_value(salary, "type"))
 
     return {
         "type": "job_card",
@@ -453,15 +495,27 @@ def _structured_entity_to_match(entity: dict, search_terms: list[str]) -> dict:
             salary_currency,
             salary_type,
         ),
-        "openings_count": _stringify_optional(entity.get("numberOfOpenings")),
-        "employment_type": _normalize_enum_label(entity.get("jobType")),
-        "seniority_level": _normalize_enum_label(entity.get("seniorityLevel")),
-        "experience_required_years": _stringify_optional(entity.get("minWorkExpYear")),
+        "openings_count": _stringify_optional(
+            _get_entity_value(entity, "numberOfOpenings", "number_of_openings")
+        ),
+        "employment_type": _normalize_enum_label(
+            _get_entity_value(entity, "jobType", "job_type")
+        ),
+        "seniority_level": _normalize_enum_label(
+            _get_entity_value(entity, "seniorityLevel", "seniority_level")
+        ),
+        "experience_required_years": _stringify_optional(
+            _get_entity_value(entity, "minWorkExpYear", "min_work_exp_year")
+        ),
         "management_responsibility": _normalize_enum_label(
-            entity.get("numberOfManagement")
+            _get_entity_value(entity, "numberOfManagement", "number_of_management")
         ),
         "tags": ", ".join(tags),
-        "content_updated_at": entity.get("contentUpdatedAt", ""),
+        "content_updated_at": _get_entity_value(
+            entity,
+            "contentUpdatedAt",
+            "content_updated_at",
+        ),
     }
 
 
@@ -477,6 +531,26 @@ def _stringify_optional(value: object) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _get_entity_value(entity: dict, *keys: str) -> str:
+    for key in keys:
+        value = entity.get(key)
+        if value is None:
+            continue
+        return str(value)
+    return ""
+
+
+def _get_entity_list(entity: dict, *keys: str) -> list[str]:
+    for key in keys:
+        value = entity.get(key)
+        if value is None:
+            continue
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        return [str(value)]
+    return []
 
 
 def _normalize_enum_label(value: str | None) -> str:
@@ -517,3 +591,64 @@ def _format_salary_display(
     if salary_type:
         parts.append(salary_type)
     return " ".join(part for part in parts if part)
+
+
+def _fetch_search_api_page(
+    keyword: str,
+    page_number: int,
+    per_page: int,
+) -> dict | None:
+    request_body = json.dumps(
+        {
+            "query": keyword.strip(),
+            "filters": {"professions": ["it"]},
+            "sort_by": "popularity",
+            "page": page_number,
+            "per_page": per_page,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = Request(
+        CAKE_CLIENT_SEARCH_API_URL,
+        data=request_body,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Origin": "https://www.cake.me",
+            "Referer": _build_search_page_url(keyword, page_number),
+            "User-Agent": "search-crawler/0.1",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            charset = response.headers.get_content_charset() or "utf-8"
+            payload = response.read().decode(charset, errors="replace")
+    except Exception:
+        return None
+
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+
+
+def _build_pagination_links(keyword: str, current_page: int, response: dict) -> list[str]:
+    total_pages = response.get("total_pages")
+    if not isinstance(total_pages, int):
+        return []
+    if current_page >= total_pages:
+        return []
+    return [_build_search_page_url(keyword, current_page + 1)]
+
+
+def _build_search_page_url(keyword: str, page_number: int) -> str:
+    encoded_keyword = quote(keyword.strip(), safe="")
+    if encoded_keyword:
+        base_url = CAKE_IT_JOBS_SEARCH_URL_TEMPLATE.format(keyword=encoded_keyword)
+    else:
+        base_url = "https://www.cake.me/jobs/for-it"
+
+    if page_number <= 1:
+        return base_url
+    return f"{base_url}?page={page_number}"

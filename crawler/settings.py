@@ -1,0 +1,8 @@
+from __future__ import annotations
+
+DEFAULT_MAX_PAGES = 9
+DEFAULT_PER_PAGE = 20
+DEFAULT_DELAY_SECONDS = 0.5
+DEFAULT_TIMEOUT_SECONDS = 10.0
+DEFAULT_OUTPUT_PATH = "data/results.jsonl"
+DEFAULT_USER_AGENT = "search-crawler/0.1"

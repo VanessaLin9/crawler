@@ -5,12 +5,22 @@ import os
 
 from crawler.core.models import CrawlConfig
 from crawler.core.spider import crawl
+from crawler.emailer import DEFAULT_SMTP_PORT, SmtpConfig, send_new_jobs_email
+from crawler.env import load_dotenv
 from crawler.google_sheets import (
     DEFAULT_GOOGLE_SERVICE_ACCOUNT,
     DEFAULT_GOOGLE_SHEET_NAME,
     sync_job_records,
 )
 from crawler.records import flatten_job_records
+from crawler.settings import (
+    DEFAULT_DELAY_SECONDS,
+    DEFAULT_MAX_PAGES,
+    DEFAULT_OUTPUT_PATH,
+    DEFAULT_PER_PAGE,
+    DEFAULT_TIMEOUT_SECONDS,
+    DEFAULT_USER_AGENT,
+)
 from crawler.sites.registry import list_sites
 
 
@@ -18,11 +28,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Keyword-based website crawler")
     parser.add_argument("site", nargs="?")
     parser.add_argument("keyword", nargs="?")
-    parser.add_argument("--max-pages", type=int, default=20)
-    parser.add_argument("--delay", type=float, default=0.5)
-    parser.add_argument("--timeout", type=float, default=10.0)
-    parser.add_argument("--output", default="data/results.jsonl")
-    parser.add_argument("--user-agent", default="search-crawler/0.1")
+    parser.add_argument("--max-pages", type=int, default=DEFAULT_MAX_PAGES)
+    parser.add_argument("--per-page", type=int, default=DEFAULT_PER_PAGE)
+    parser.add_argument("--delay", type=float, default=DEFAULT_DELAY_SECONDS)
+    parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT_SECONDS)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT_PATH)
+    parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT)
     parser.add_argument("--search-url-template")
     parser.add_argument("--list-sites", action="store_true")
     parser.add_argument("--sync-google-sheet", action="store_true")
@@ -39,10 +50,27 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--reset-google-sheet", action="store_true")
+    parser.add_argument("--send-email-notification", action="store_true")
+    parser.add_argument("--smtp-host", default=os.getenv("SMTP_HOST"))
+    parser.add_argument(
+        "--smtp-port",
+        type=int,
+        default=int(os.getenv("SMTP_PORT", DEFAULT_SMTP_PORT)),
+    )
+    parser.add_argument("--smtp-username", default=os.getenv("SMTP_USERNAME", ""))
+    parser.add_argument("--smtp-password", default=os.getenv("SMTP_PASSWORD", ""))
+    parser.add_argument("--smtp-from-email", default=os.getenv("SMTP_FROM_EMAIL"))
+    parser.add_argument("--smtp-to-email", default=os.getenv("SMTP_TO_EMAIL"))
+    parser.add_argument(
+        "--smtp-no-tls",
+        action="store_true",
+        help="Disable STARTTLS for SMTP connections",
+    )
     return parser
 
 
 def main() -> None:
+    load_dotenv()
     args = build_parser().parse_args()
     if args.list_sites:
         for site in list_sites():
@@ -56,6 +84,7 @@ def main() -> None:
         site=args.site,
         keyword=args.keyword,
         max_pages=args.max_pages,
+        per_page=args.per_page,
         delay_seconds=args.delay,
         timeout_seconds=args.timeout,
         output_path=args.output,
@@ -82,6 +111,46 @@ def main() -> None:
         print(
             f"Synced {sync_result.appended_count} new rows to "
             f"{sync_result.sheet_name}; skipped {sync_result.skipped_count} duplicates."
+        )
+
+        if args.send_email_notification:
+            _validate_email_args(args)
+            if sync_result.appended_records:
+                send_new_jobs_email(
+                    smtp_config=SmtpConfig(
+                        host=args.smtp_host,
+                        port=args.smtp_port,
+                        username=args.smtp_username,
+                        password=args.smtp_password,
+                        from_email=args.smtp_from_email,
+                        to_email=args.smtp_to_email,
+                        use_tls=not args.smtp_no_tls,
+                    ),
+                    site=args.site,
+                    keyword=args.keyword,
+                    records=sync_result.appended_records,
+                    sheet_name=sync_result.sheet_name,
+                    spreadsheet_id=sync_result.spreadsheet_id,
+                )
+                print(
+                    f"Sent email notification for {len(sync_result.appended_records)} new jobs."
+                )
+            else:
+                print("No new jobs found; skipped email notification.")
+    elif args.send_email_notification:
+        raise SystemExit("--send-email-notification requires --sync-google-sheet")
+
+
+def _validate_email_args(args: argparse.Namespace) -> None:
+    required = {
+        "--smtp-host / SMTP_HOST": args.smtp_host,
+        "--smtp-from-email / SMTP_FROM_EMAIL": args.smtp_from_email,
+        "--smtp-to-email / SMTP_TO_EMAIL": args.smtp_to_email,
+    }
+    missing = [name for name, value in required.items() if not value]
+    if missing:
+        raise SystemExit(
+            "Missing SMTP configuration: " + ", ".join(missing)
         )
 
 

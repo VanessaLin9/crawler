@@ -7,7 +7,7 @@
 - 共用核心流程：抓取、延遲、輸出、同網域追蹤
 - 每個網站用一個 adapter 實作搜尋網址與解析規則
 - 支援以關鍵字啟動搜尋流程
-- 自訂最大頁數、延遲、timeout、User-Agent
+- 自訂最大頁數、每頁筆數、延遲、timeout、User-Agent
 - 將結果輸出成 JSON Lines
 - 可將去重後的新職缺同步到 Google Sheets
 - 內含 adapter 與 URL 工具函式測試
@@ -47,16 +47,25 @@ crawl-site generic "openai" \
 `cake` 用法：
 
 ```bash
-crawl-site cake "python" --max-pages 3 --output data/cake-python.jsonl
+crawl-site cake "python" --output data/cake-python.jsonl
 ```
 
 這會從像 `https://www.cake.me/jobs/python/for-it` 這類 Cake 搜尋結果頁開始抓。
+目前預設值集中在 [crawler/settings.py](/Users/vanessa/develop/search/crawler/settings.py)：
+
+- `max_pages = 9`
+- `per_page = 20`
+
+如果要臨時覆寫，也可以直接下參數：
+
+```bash
+crawl-site cake "後端" --max-pages 9 --per-page 20
+```
 
 同步到 Google Sheets：
 
 ```bash
 crawl-site cake "後端" \
-  --max-pages 3 \
   --output data/cake-backend-pages3.jsonl \
   --sync-google-sheet \
   --google-sheet-id "1Tr2uPfulJdlw9i0TZ42Z8-xAuUM0zhbMQx3Oi02WHjI" \
@@ -68,7 +77,6 @@ crawl-site cake "後端" \
 
 ```bash
 crawl-site cake "後端" \
-  --max-pages 3 \
   --sync-google-sheet \
   --reset-google-sheet
 ```
@@ -84,7 +92,32 @@ export GOOGLE_SERVICE_ACCOUNT_JSON="secrets/google-service-account.json"
 再執行：
 
 ```bash
-crawl-site cake "後端" --max-pages 3 --sync-google-sheet
+crawl-site cake "後端" --sync-google-sheet
+```
+
+同步到 Google Sheets 後寄 email 摘要：
+
+```bash
+crawl-site cake "後端" \
+  --sync-google-sheet \
+  --send-email-notification \
+  --smtp-host "smtp.gmail.com" \
+  --smtp-port 587 \
+  --smtp-username "your-account@gmail.com" \
+  --smtp-password "your-app-password" \
+  --smtp-from-email "your-account@gmail.com" \
+  --smtp-to-email "your-account@gmail.com"
+```
+
+也可以用環境變數：
+
+```bash
+export SMTP_HOST="smtp.gmail.com"
+export SMTP_PORT="587"
+export SMTP_USERNAME="your-account@gmail.com"
+export SMTP_PASSWORD="your-app-password"
+export SMTP_FROM_EMAIL="your-account@gmail.com"
+export SMTP_TO_EMAIL="your-account@gmail.com"
 ```
 
 ## 輸出格式
@@ -99,6 +132,7 @@ crawl-site cake "後端" --max-pages 3 --sync-google-sheet
 - `links`
 
 同步到 Google Sheets 時，會先將 `matches` flatten 成「一職缺一列」，並以 `job_url` 去重，只有不存在於表單的職缺才會 append。
+如果加上 `--send-email-notification`，只有這次真的新增到表單的職缺才會寄出摘要信；沒有新資料就不寄。
 
 目前同步到表單的主要欄位包含：
 

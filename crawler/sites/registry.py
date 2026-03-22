@@ -15,7 +15,11 @@ def _build_generic_from_config(config: CrawlConfig) -> SiteAdapter:
 
 
 REGISTRY: dict[str, AdapterFactory] = {
-    "cake": lambda config: CakeItJobsAdapter(config.keyword),
+    "cake": lambda config: CakeItJobsAdapter(
+        config.keyword,
+        per_page=config.per_page,
+        use_search_api=True,
+    ),
     "generic": _build_generic_from_config,
 }
 

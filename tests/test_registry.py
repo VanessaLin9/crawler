@@ -21,6 +21,8 @@ class SiteRegistryTests(unittest.TestCase):
         config = CrawlConfig(site="cake", keyword="python")
         adapter = build_site_adapter(config)
         self.assertEqual(adapter.name, "cake")
+        self.assertEqual(adapter.per_page, 20)
+        self.assertTrue(adapter.use_search_api)
 
 
 if __name__ == "__main__":

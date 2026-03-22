@@ -13,6 +13,7 @@ DEFAULT_GOOGLE_SHEET_NAME = "cake_jobs"
 @dataclass(slots=True)
 class SheetSyncResult:
     appended_count: int
+    appended_records: list[JobRecord]
     skipped_count: int
     sheet_name: str
     spreadsheet_id: str
@@ -32,16 +33,18 @@ def sync_job_records(
     _ensure_header_row(service, spreadsheet_id, sheet_name)
     existing_urls = _fetch_existing_job_urls(service, spreadsheet_id, sheet_name)
 
-    rows_to_append = [
-        record.to_sheet_row()
+    appended_records = [
+        record
         for record in records
         if record.job_url not in existing_urls
     ]
+    rows_to_append = [record.to_sheet_row() for record in appended_records]
     if rows_to_append:
         _append_rows(service, spreadsheet_id, sheet_name, rows_to_append)
 
     return SheetSyncResult(
         appended_count=len(rows_to_append),
+        appended_records=appended_records,
         skipped_count=len(records) - len(rows_to_append),
         sheet_name=sheet_name,
         spreadsheet_id=spreadsheet_id,

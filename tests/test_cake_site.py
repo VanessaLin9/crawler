@@ -1,5 +1,6 @@
 import unittest
 import json
+from unittest.mock import patch
 
 from crawler.sites.cake import (
     CAKE_IT_JOBS_SEARCH_URL_TEMPLATE,
@@ -151,6 +152,63 @@ class CakeSiteAdapterTests(unittest.TestCase):
         self.assertEqual(
             match["job_url"],
             "https://www.cake.me/companies/acme/jobs/backend-engineer-1",
+        )
+
+    @patch("crawler.sites.cake._fetch_search_api_page")
+    def test_parse_page_uses_api_results_for_page_two(self, mock_fetch_search_api_page) -> None:
+        adapter = CakeItJobsAdapter("後端", use_search_api=True)
+        mock_fetch_search_api_page.return_value = {
+            "total_pages": 63,
+            "current_page": 2,
+            "data": [
+                {
+                    "path": "sports-game-system-backend",
+                    "title": "【體育遊戲系統】後端工程師 (台中市西區)",
+                    "description": "維護高品質系統與 API 服務",
+                    "locations": ["臺中市, 台灣"],
+                    "salary": {
+                        "min": "50000",
+                        "max": "100000",
+                        "currency": "TWD",
+                        "type": "per_month",
+                    },
+                    "seniority_level": "entry_level",
+                    "job_type": "full_time",
+                    "number_of_management": "none",
+                    "number_of_openings": 1,
+                    "tags": ["後端", "Python"],
+                    "page": {
+                        "path": "cloudlatitudesoftware",
+                        "name": "緯雲股份有限公司",
+                    },
+                    "min_work_exp_year": 1,
+                    "content_updated_at": "2026-03-17T06:17:16.052728Z",
+                }
+            ],
+        }
+
+        parsed = adapter.parse_page(
+            "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it?page=2",
+            "<html><head><title>Cake Job Search</title></head><body></body></html>",
+            "後端",
+        )
+
+        mock_fetch_search_api_page.assert_called_once_with("後端", 2, 20)
+        self.assertEqual(len(parsed.matches), 1)
+        match = parsed.matches[0]
+        self.assertEqual(match["title"], "【體育遊戲系統】後端工程師 (台中市西區)")
+        self.assertEqual(match["company_name"], "緯雲股份有限公司")
+        self.assertEqual(match["location"], "臺中市, 台灣")
+        self.assertEqual(match["salary_display"], "50000 - 100000 TWD per_month")
+        self.assertEqual(match["employment_type"], "full_time")
+        self.assertEqual(match["seniority_level"], "entry_level")
+        self.assertEqual(
+            match["job_url"],
+            "https://www.cake.me/companies/cloudlatitudesoftware/jobs/sports-game-system-backend",
+        )
+        self.assertIn(
+            "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it?page=3",
+            parsed.links,
         )
 
 
