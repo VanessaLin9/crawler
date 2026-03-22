@@ -9,6 +9,7 @@
 - 支援以關鍵字啟動搜尋流程
 - 自訂最大頁數、延遲、timeout、User-Agent
 - 將結果輸出成 JSON Lines
+- 可將去重後的新職缺同步到 Google Sheets
 - 內含 adapter 與 URL 工具函式測試
 
 ## 環境
@@ -51,6 +52,32 @@ crawl-site cake "python" --max-pages 3 --output data/cake-python.jsonl
 
 這會從像 `https://www.cake.me/jobs/python/for-it` 這類 Cake 搜尋結果頁開始抓。
 
+同步到 Google Sheets：
+
+```bash
+crawl-site cake "後端" \
+  --max-pages 3 \
+  --output data/cake-backend-pages3.jsonl \
+  --sync-google-sheet \
+  --google-sheet-id "1Tr2uPfulJdlw9i0TZ42Z8-xAuUM0zhbMQx3Oi02WHjI" \
+  --google-sheet-name "cake_jobs" \
+  --google-service-account "secrets/google-service-account.json"
+```
+
+也可以改用環境變數：
+
+```bash
+export GOOGLE_SHEET_ID="1Tr2uPfulJdlw9i0TZ42Z8-xAuUM0zhbMQx3Oi02WHjI"
+export GOOGLE_SHEET_NAME="cake_jobs"
+export GOOGLE_SERVICE_ACCOUNT_JSON="secrets/google-service-account.json"
+```
+
+再執行：
+
+```bash
+crawl-site cake "後端" --max-pages 3 --sync-google-sheet
+```
+
 ## 輸出格式
 
 每一行都是一筆 JSON，欄位包含：
@@ -61,6 +88,8 @@ crawl-site cake "python" --max-pages 3 --output data/cake-python.jsonl
 - `meta_description`
 - `matches`
 - `links`
+
+同步到 Google Sheets 時，會先將 `matches` flatten 成「一職缺一列」，並以 `job_url` 去重，只有不存在於表單的職缺才會 append。
 
 ## 專案結構
 
