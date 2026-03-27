@@ -1,41 +1,201 @@
 # Search Crawler
 
-一個可直接開始改的 Python 網頁爬蟲骨架，採用 `core + site adapters` 架構，方便同一個專案支援多個網站。
+用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成第一個 provider：`Cake`。
 
-## 功能
+這個專案目前已經打通：
 
-- 共用核心流程：抓取、延遲、輸出、同網域追蹤
-- 每個網站用一個 adapter 實作搜尋網址與解析規則
-- 支援以關鍵字啟動搜尋流程
-- 自訂最大頁數、每頁筆數、延遲、timeout、User-Agent
-- 將結果輸出成 JSON Lines
-- 可將去重後的新職缺同步到 Google Sheets
-- 內含 adapter 與 URL 工具函式測試
+- 依關鍵字搜尋職缺
+- 多頁抓取
+- 結構化欄位解析
+- 同步到 Google Sheets
+- 以 `job_url` 去重
+- 寄送人類可讀摘要信
+- 額外寄送 machine-readable JSON 信
 
-## 環境
+## 快速開始
 
-建議使用 Python 3.11 以上。
-
-## 安裝
+### 1. 安裝
 
 ```bash
+git clone https://github.com/VanessaLin9/crawler.git
+cd crawler
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
 
-## 使用
+### 2. 建立本地設定
+
+```bash
+cp .env.sample .env
+```
+
+然後編輯 `.env`，至少填這些：
+
+- `GOOGLE_SHEET_ID`
+- `GOOGLE_SHEET_NAME`
+- `GOOGLE_SERVICE_ACCOUNT_JSON`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_TO_EMAIL`
+
+如果你要另外寄一封 JSON 格式通知給其他系統，再加：
+
+- `MACHINE_EMAIL_ENABLED=true`
+- `MACHINE_EMAIL_TO=machine-consumer@example.com`
+
+### 3. 準備 Google Sheet
+
+你需要：
+
+1. 建一份 Google Sheet
+2. 建立 Google service account JSON
+3. 把那份 Sheet 分享給 service account email，權限給 `Editor`
+4. 把 JSON 檔放到本機，例如：
+   `secrets/google-service-account.json`
+
+`.env` 對應範例：
+
+```env
+GOOGLE_SHEET_ID=your_google_sheet_id
+GOOGLE_SHEET_NAME=cake_jobs
+GOOGLE_SERVICE_ACCOUNT_JSON=secrets/google-service-account.json
+```
+
+## 最常用指令
+
+下面指令都假設你已經先：
+
+```bash
+cd /Users/vanessa/develop/search
+source .venv/bin/activate
+```
+
+### 列出可用站點
 
 ```bash
 crawl-site --list-sites
 ```
 
-目前內建：
+### 只爬，不更新表單、不寄信
 
-- `generic`: 適合先快速接任意搜尋頁模板
-- `cake`: 針對 `https://www.cake.me/jobs/{keyword}/for-it` 的 IT 職缺搜尋頁
+```bash
+crawl-site cake "後端"
+```
 
-`generic` 用法：
+### 爬完後同步到 Google Sheet
+
+```bash
+crawl-site cake "後端" --sync-google-sheet
+```
+
+### 爬完後同步到 Google Sheet，並寄通知信
+
+```bash
+crawl-site cake "後端" --sync-google-sheet --send-email-notification
+```
+
+### 強制重建 Google Sheet 後重跑
+
+這條會清空工作表再重建，平常不要亂下：
+
+```bash
+crawl-site cake "後端" \
+  --sync-google-sheet \
+  --reset-google-sheet \
+  --send-email-notification
+```
+
+### 換關鍵字搜尋
+
+例如改成搜尋前端：
+
+```bash
+crawl-site cake "前端" --sync-google-sheet --send-email-notification
+```
+
+## 預設設定
+
+目前集中在 [crawler/settings.py](/Users/vanessa/develop/search/crawler/settings.py)：
+
+- `max_pages = 9`
+- `per_page = 20`
+- `delay_seconds = 0.5`
+- `timeout_seconds = 10.0`
+
+也就是說，預設會抓：
+
+- 最多 `9` 頁
+- 每頁 `20` 筆
+
+如果你想暫時覆寫：
+
+```bash
+crawl-site cake "後端" --max-pages 5 --per-page 30
+```
+
+## 寄信行為
+
+如果有加 `--send-email-notification`：
+
+- 會先同步到 Google Sheet
+- 只會寄送「這次新增的職缺」
+- 如果這次沒有新職缺，就不寄信
+
+目前支援兩種通知：
+
+- 人類可讀摘要信
+- machine-readable JSON 信
+
+JSON 信是可選功能，預設關閉。  
+開啟方式：
+
+```env
+MACHINE_EMAIL_ENABLED=true
+MACHINE_EMAIL_TO=machine-consumer@example.com
+```
+
+## Google Sheet 去重規則
+
+同步到 Google Sheets 時，會先把搜尋頁結果 flatten 成「一職缺一列」，然後用 `job_url` 去重。
+
+所以這條：
+
+```bash
+crawl-site cake "後端" --sync-google-sheet --send-email-notification
+```
+
+在 Google Sheet 已經有相同職缺時：
+
+- 不會重複寫入
+- 不會重複寄信
+
+只有你加上 `--reset-google-sheet`，才會整張表清掉重來。
+
+## 目前支援的站點
+
+- `cake`
+- `generic`
+
+### Cake
+
+`cake` 目前針對這種搜尋頁：
+
+`https://www.cake.me/jobs/{keyword}/for-it`
+
+例如：
+
+- `後端`
+- `前端`
+- `python`
+- `react`
+
+### Generic
+
+`generic` 是快速模板，適合先接其他網站：
 
 ```bash
 crawl-site generic "openai" \
@@ -44,85 +204,9 @@ crawl-site generic "openai" \
   --output data/example.jsonl
 ```
 
-`cake` 用法：
-
-```bash
-crawl-site cake "python" --output data/cake-python.jsonl
-```
-
-這會從像 `https://www.cake.me/jobs/python/for-it` 這類 Cake 搜尋結果頁開始抓。
-目前預設值集中在 [crawler/settings.py](/Users/vanessa/develop/search/crawler/settings.py)：
-
-- `max_pages = 9`
-- `per_page = 20`
-
-如果要臨時覆寫，也可以直接下參數：
-
-```bash
-crawl-site cake "後端" --max-pages 9 --per-page 20
-```
-
-同步到 Google Sheets：
-
-```bash
-crawl-site cake "後端" \
-  --output data/cake-backend-pages3.jsonl \
-  --sync-google-sheet \
-  --google-sheet-id "1Tr2uPfulJdlw9i0TZ42Z8-xAuUM0zhbMQx3Oi02WHjI" \
-  --google-sheet-name "cake_jobs" \
-  --google-service-account "secrets/google-service-account.json"
-```
-
-如果要因應欄位 schema 變更重建工作表：
-
-```bash
-crawl-site cake "後端" \
-  --sync-google-sheet \
-  --reset-google-sheet
-```
-
-也可以改用環境變數：
-
-```bash
-export GOOGLE_SHEET_ID="1Tr2uPfulJdlw9i0TZ42Z8-xAuUM0zhbMQx3Oi02WHjI"
-export GOOGLE_SHEET_NAME="cake_jobs"
-export GOOGLE_SERVICE_ACCOUNT_JSON="secrets/google-service-account.json"
-```
-
-再執行：
-
-```bash
-crawl-site cake "後端" --sync-google-sheet
-```
-
-同步到 Google Sheets 後寄 email 摘要：
-
-```bash
-crawl-site cake "後端" \
-  --sync-google-sheet \
-  --send-email-notification \
-  --smtp-host "smtp.gmail.com" \
-  --smtp-port 587 \
-  --smtp-username "your-account@gmail.com" \
-  --smtp-password "your-app-password" \
-  --smtp-from-email "your-account@gmail.com" \
-  --smtp-to-email "your-account@gmail.com"
-```
-
-也可以用環境變數：
-
-```bash
-export SMTP_HOST="smtp.gmail.com"
-export SMTP_PORT="587"
-export SMTP_USERNAME="your-account@gmail.com"
-export SMTP_PASSWORD="your-app-password"
-export SMTP_FROM_EMAIL="your-account@gmail.com"
-export SMTP_TO_EMAIL="your-account@gmail.com"
-```
-
 ## 輸出格式
 
-每一行都是一筆 JSON，欄位包含：
+原始輸出是 `.jsonl`，每一行是一頁搜尋結果，欄位大致包含：
 
 - `url`
 - `status_code`
@@ -131,14 +215,15 @@ export SMTP_TO_EMAIL="your-account@gmail.com"
 - `matches`
 - `links`
 
-同步到 Google Sheets 時，會先將 `matches` flatten 成「一職缺一列」，並以 `job_url` 去重，只有不存在於表單的職缺才會 append。
-如果加上 `--send-email-notification`，只有這次真的新增到表單的職缺才會寄出摘要信；沒有新資料就不寄。
+同步到 Google Sheets 時，會轉成一職缺一列。
 
-目前同步到表單的主要欄位包含：
+目前主要欄位包含：
 
 - `job_url`
 - `title`
 - `company_name`
+- `company_url`
+- `keyword`
 - `location`
 - `salary_min`
 - `salary_max`
@@ -151,23 +236,30 @@ export SMTP_TO_EMAIL="your-account@gmail.com"
 - `experience_required_years`
 - `management_responsibility`
 - `tags`
+- `matched_fields`
+- `matched_terms`
+- `summary`
 
 ## 專案結構
 
 - `crawler/core/`: 共用抓取流程與輸出
 - `crawler/sites/`: 各網站 adapter
-- `crawler/sites/template.py`: 新網站的起始模板
+- `crawler/sites/template.py`: 新網站模板
+- `crawler/google_sheets.py`: Google Sheets 同步
+- `crawler/emailer.py`: email 通知
+- `crawler/settings.py`: 預設設定集中管理
 
-## 新增網站
+## 自己擴充新網站
 
-1. 以 `crawler/sites/template.py` 為基礎建立新的 adapter
+1. 以 [template.py](/Users/vanessa/develop/search/crawler/sites/template.py) 為基礎建立新的 adapter
 2. 實作 `build_start_urls()`
 3. 實作 `parse_page()`
 4. 視需要調整 `should_visit()`
-5. 在 `crawler/sites/registry.py` 註冊站點名稱
+5. 在 [registry.py](/Users/vanessa/develop/search/crawler/sites/registry.py) 註冊站點名稱
 
-## 下一步建議
+## 注意事項
 
-- 目標網站如果依賴 JavaScript，再補 Playwright adapter
-- Cake 如果要抓更細的欄位，可以再補薪資、地點、年資解析
-- 如果要長期跑，再補上重試、proxy、robots.txt 與排程
+- `.env` 不會進 git
+- `secrets/` 不會進 git
+- `.env.sample` 只是範例，請自己填自己的 Google Sheet 和 SMTP 設定
+- 如果你 clone 這個 repo 給別人用，對方必須用自己的 `.env` 和自己的 service account

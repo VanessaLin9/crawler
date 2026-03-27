@@ -5,7 +5,12 @@ import os
 
 from crawler.core.models import CrawlConfig
 from crawler.core.spider import crawl
-from crawler.emailer import DEFAULT_SMTP_PORT, SmtpConfig, send_new_jobs_email
+from crawler.emailer import (
+    DEFAULT_SMTP_PORT,
+    SmtpConfig,
+    send_new_jobs_email,
+    send_new_jobs_json_email,
+)
 from crawler.env import load_dotenv
 from crawler.google_sheets import (
     DEFAULT_GOOGLE_SERVICE_ACCOUNT,
@@ -16,6 +21,8 @@ from crawler.records import flatten_job_records
 from crawler.settings import (
     DEFAULT_DELAY_SECONDS,
     DEFAULT_MAX_PAGES,
+    DEFAULT_MACHINE_EMAIL_ENABLED,
+    DEFAULT_MACHINE_EMAIL_TO,
     DEFAULT_OUTPUT_PATH,
     DEFAULT_PER_PAGE,
     DEFAULT_TIMEOUT_SECONDS,
@@ -61,6 +68,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--smtp-password", default=os.getenv("SMTP_PASSWORD", ""))
     parser.add_argument("--smtp-from-email", default=os.getenv("SMTP_FROM_EMAIL"))
     parser.add_argument("--smtp-to-email", default=os.getenv("SMTP_TO_EMAIL"))
+    parser.add_argument(
+        "--send-machine-email-notification",
+        action="store_true",
+        default=_env_flag(
+            "MACHINE_EMAIL_ENABLED",
+            DEFAULT_MACHINE_EMAIL_ENABLED,
+        ),
+    )
+    parser.add_argument(
+        "--machine-email-to",
+        default=os.getenv("MACHINE_EMAIL_TO", DEFAULT_MACHINE_EMAIL_TO),
+    )
     parser.add_argument(
         "--smtp-no-tls",
         action="store_true",
@@ -116,16 +135,39 @@ def main() -> None:
         if args.send_email_notification:
             _validate_email_args(args)
             if sync_result.appended_records:
+                base_smtp_config = SmtpConfig(
+                    host=args.smtp_host,
+                    port=args.smtp_port,
+                    username=args.smtp_username,
+                    password=args.smtp_password,
+                    from_email=args.smtp_from_email,
+                    to_email=args.smtp_to_email,
+                    use_tls=not args.smtp_no_tls,
+                )
+                if args.send_machine_email_notification:
+                    _validate_machine_email_args(args)
+                    send_new_jobs_json_email(
+                        smtp_config=SmtpConfig(
+                            host=base_smtp_config.host,
+                            port=base_smtp_config.port,
+                            username=base_smtp_config.username,
+                            password=base_smtp_config.password,
+                            from_email=base_smtp_config.from_email,
+                            to_email=args.machine_email_to,
+                            use_tls=base_smtp_config.use_tls,
+                        ),
+                        site=args.site,
+                        keyword=args.keyword,
+                        records=sync_result.appended_records,
+                        sheet_name=sync_result.sheet_name,
+                        spreadsheet_id=sync_result.spreadsheet_id,
+                    )
+                    print(
+                        "Sent machine-readable email notification for "
+                        f"{len(sync_result.appended_records)} new jobs."
+                    )
                 send_new_jobs_email(
-                    smtp_config=SmtpConfig(
-                        host=args.smtp_host,
-                        port=args.smtp_port,
-                        username=args.smtp_username,
-                        password=args.smtp_password,
-                        from_email=args.smtp_from_email,
-                        to_email=args.smtp_to_email,
-                        use_tls=not args.smtp_no_tls,
-                    ),
+                    smtp_config=base_smtp_config,
                     site=args.site,
                     keyword=args.keyword,
                     records=sync_result.appended_records,
@@ -141,6 +183,13 @@ def main() -> None:
         raise SystemExit("--send-email-notification requires --sync-google-sheet")
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().casefold() in {"1", "true", "yes", "on"}
+
+
 def _validate_email_args(args: argparse.Namespace) -> None:
     required = {
         "--smtp-host / SMTP_HOST": args.smtp_host,
@@ -152,6 +201,15 @@ def _validate_email_args(args: argparse.Namespace) -> None:
         raise SystemExit(
             "Missing SMTP configuration: " + ", ".join(missing)
         )
+
+
+def _validate_machine_email_args(args: argparse.Namespace) -> None:
+    if args.machine_email_to:
+        return
+    raise SystemExit(
+        "Missing machine email configuration: "
+        "--machine-email-to / MACHINE_EMAIL_TO"
+    )
 
 
 if __name__ == "__main__":

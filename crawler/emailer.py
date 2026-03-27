@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 import smtplib
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from email.message import EmailMessage
 from email.utils import formatdate
 
@@ -47,17 +48,45 @@ def send_new_jobs_email(
             spreadsheet_id=spreadsheet_id,
         )
     )
+    _send_message(smtp_config, message)
 
-    with smtplib.SMTP(smtp_config.host, smtp_config.port, timeout=30) as server:
-        if smtp_config.use_tls:
-            server.starttls()
-        if smtp_config.username:
-            server.login(smtp_config.username, smtp_config.password)
-        server.send_message(message)
+
+def send_new_jobs_json_email(
+    smtp_config: SmtpConfig,
+    site: str,
+    keyword: str,
+    records: list[JobRecord],
+    sheet_name: str,
+    spreadsheet_id: str,
+) -> None:
+    if not records:
+        return
+
+    message = EmailMessage()
+    message["Subject"] = _build_json_subject(site, keyword, len(records))
+    message["From"] = smtp_config.from_email
+    message["To"] = smtp_config.to_email
+    message["Date"] = formatdate(localtime=True)
+    message.set_content(
+        _build_json_body(
+            site=site,
+            keyword=keyword,
+            records=records,
+            sheet_name=sheet_name,
+            spreadsheet_id=spreadsheet_id,
+        ),
+        subtype="json",
+        charset="utf-8",
+    )
+    _send_message(smtp_config, message)
 
 
 def _build_subject(site: str, keyword: str, count: int) -> str:
     return f"[Crawler] {site} {keyword} new jobs: {count}"
+
+
+def _build_json_subject(site: str, keyword: str, count: int) -> str:
+    return f"[Crawler JSON] {site} {keyword} new jobs: {count}"
 
 
 def _build_plain_text_body(
@@ -92,3 +121,31 @@ def _build_plain_text_body(
         )
 
     return "\n".join(lines).strip() + "\n"
+
+
+def _build_json_body(
+    site: str,
+    keyword: str,
+    records: list[JobRecord],
+    sheet_name: str,
+    spreadsheet_id: str,
+) -> str:
+    payload = {
+        "site": site,
+        "keyword": keyword,
+        "new_jobs_count": len(records),
+        "sheet_name": sheet_name,
+        "spreadsheet_id": spreadsheet_id,
+        "sheet_url": f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/edit",
+        "jobs": [asdict(record) for record in records],
+    }
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
+def _send_message(smtp_config: SmtpConfig, message: EmailMessage) -> None:
+    with smtplib.SMTP(smtp_config.host, smtp_config.port, timeout=30) as server:
+        if smtp_config.use_tls:
+            server.starttls()
+        if smtp_config.username:
+            server.login(smtp_config.username, smtp_config.password)
+        server.send_message(message)
