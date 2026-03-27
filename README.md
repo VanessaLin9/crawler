@@ -47,6 +47,27 @@ cp .env.sample .env
 - `MACHINE_EMAIL_ENABLED=true`
 - `MACHINE_EMAIL_TO=machine-consumer@example.com`
 
+### `.env` 欄位說明
+
+- `GOOGLE_SHEET_ID`: Google Sheet 的 spreadsheet ID
+  可以從 Google Sheet URL 中間那段拿到
+- `GOOGLE_SHEET_NAME`: 要寫入的工作表名稱
+  例如 `cake_jobs`
+- `GOOGLE_SERVICE_ACCOUNT_JSON`: Google service account JSON 檔案路徑
+  例如 `secrets/google-service-account.json`
+- `SMTP_HOST`: SMTP 伺服器位址
+  Gmail 通常是 `smtp.gmail.com`
+- `SMTP_PORT`: SMTP port
+  Gmail STARTTLS 通常是 `587`
+- `SMTP_USERNAME`: SMTP 登入帳號
+  通常就是寄件信箱
+- `SMTP_PASSWORD`: SMTP 密碼
+  如果是 Gmail，通常要填 app password，不是一般登入密碼
+- `SMTP_FROM_EMAIL`: 寄件者 email
+- `SMTP_TO_EMAIL`: 人類可讀摘要信的收件者
+- `MACHINE_EMAIL_ENABLED`: 是否額外寄一封 JSON 通知信
+- `MACHINE_EMAIL_TO`: JSON 通知信的收件者
+
 ### 3. 準備 Google Sheet
 
 你需要：
