@@ -47,6 +47,9 @@ cp .env.sample .env
 - `MACHINE_EMAIL_ENABLED=true`
 - `MACHINE_EMAIL_TO=machine-consumer@example.com`
 
+如果你目前不需要寄信，可以先不填 `SMTP_*`。
+只有在使用 `--send-email-notification` 時，才需要 SMTP 相關設定。
+
 ### `.env` 欄位說明
 
 - `GOOGLE_SHEET_ID`: Google Sheet 的 spreadsheet ID
