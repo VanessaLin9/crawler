@@ -14,7 +14,6 @@ from crawler.emailer import (
 from crawler.env import load_dotenv
 from crawler.google_sheets import (
     DEFAULT_GOOGLE_SERVICE_ACCOUNT,
-    DEFAULT_GOOGLE_SHEET_NAME,
     sync_job_records,
 )
 from crawler.records import flatten_job_records
@@ -45,10 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--list-sites", action="store_true")
     parser.add_argument("--sync-google-sheet", action="store_true")
     parser.add_argument("--google-sheet-id", default=os.getenv("GOOGLE_SHEET_ID"))
-    parser.add_argument(
-        "--google-sheet-name",
-        default=os.getenv("GOOGLE_SHEET_NAME", DEFAULT_GOOGLE_SHEET_NAME),
-    )
+    parser.add_argument("--google-sheet-name")
     parser.add_argument(
         "--google-service-account",
         default=os.getenv(
@@ -119,11 +115,16 @@ def main() -> None:
                 "--sync-google-sheet is used"
             )
 
+        sheet_name = _resolve_google_sheet_name(
+            site=args.site,
+            explicit_name=args.google_sheet_name,
+            env_name=os.getenv("GOOGLE_SHEET_NAME"),
+        )
         records = flatten_job_records(results)
         sync_result = sync_job_records(
             records=records,
             spreadsheet_id=args.google_sheet_id,
-            sheet_name=args.google_sheet_name,
+            sheet_name=sheet_name,
             service_account_path=args.google_service_account,
             reset_sheet=args.reset_google_sheet,
         )
@@ -188,6 +189,29 @@ def _env_flag(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _resolve_google_sheet_name(
+    site: str,
+    explicit_name: str | None,
+    env_name: str | None,
+) -> str:
+    explicit_value = (explicit_name or "").strip()
+    if explicit_value:
+        return explicit_value
+
+    env_value = (env_name or "").strip()
+    # Preserve intentionally customized env values, but do not force the old
+    # single-sheet default onto every provider.
+    if env_value and env_value != "cake_jobs":
+        return env_value
+
+    return _default_google_sheet_name(site)
+
+
+def _default_google_sheet_name(site: str) -> str:
+    normalized_site = site.strip().casefold()
+    return f"{normalized_site}_jobs"
 
 
 def _validate_email_args(args: argparse.Namespace) -> None:
