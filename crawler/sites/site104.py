@@ -114,14 +114,12 @@ def _parse_api_job_matches(response: dict, search_terms: list[str]) -> list[dict
 
 
 def _entity_matches_keyword(entity: dict, search_terms: list[str]) -> bool:
-    texts = [
-        _get_string(entity, "jobName", "jobNameSnippet"),
-        _get_string(entity, "custName"),
-        _clean_snippet_markup(_get_string(entity, "descSnippet", "description")),
-        " ".join(_collect_tags(entity)),
-    ]
-    haystack = " ".join(texts)
-    return bool(_find_matching_terms(haystack, search_terms))
+    title = _get_string(entity, "jobName", "jobNameSnippet")
+    tags_text = " ".join(_collect_tags(entity))
+    return bool(
+        _find_matching_terms(title, search_terms)
+        or _find_matching_terms(tags_text, search_terms)
+    )
 
 
 def _entity_to_match(entity: dict, search_terms: list[str]) -> dict:

@@ -103,6 +103,75 @@ class OneOhFourSiteAdapterTests(unittest.TestCase):
             )
         )
 
+    def test_parse_page_filters_out_summary_only_matches(self) -> None:
+        adapter = OneOhFourJobsAdapter("後端", per_page=30)
+        api_response = {
+            "data": [
+                {
+                    "appearDate": "20260327",
+                    "custName": "華義國際數位娛樂股份有限公司",
+                    "description": "與前端、後端工程師協調，確保功能實現。",
+                    "descSnippet": "與前端、[[[後端工程師]]]協調，確保功能實現。",
+                    "jobAddrNoDesc": "台北市內湖區",
+                    "jobAddress": "行愛路",
+                    "jobName": "資深博弈遊戲開發企劃 A",
+                    "link": {
+                        "job": "https://www.104.com.tw/job/noisy1",
+                        "cust": "https://www.104.com.tw/company/noisy-company",
+                    },
+                    "pcSkills": [],
+                    "tags": {},
+                }
+            ],
+            "metadata": {
+                "pagination": {"count": 30, "currentPage": 1, "lastPage": 1, "total": 1}
+            },
+        }
+
+        with patch("crawler.sites.site104._fetch_search_api_page", return_value=api_response):
+            parsed = adapter.parse_page(
+                JOB104_SEARCH_URL,
+                "<html><head><title>104 工作搜尋</title></head><body></body></html>",
+                "後端",
+            )
+
+        self.assertEqual(parsed.matches, [])
+
+    def test_parse_page_keeps_tag_matches_even_without_title_match(self) -> None:
+        adapter = OneOhFourJobsAdapter("後端", per_page=30)
+        api_response = {
+            "data": [
+                {
+                    "appearDate": "20260327",
+                    "custName": "測試公司",
+                    "description": "負責系統協作與平台串接。",
+                    "descSnippet": "負責系統協作與平台串接。",
+                    "jobAddrNoDesc": "台北市中山區",
+                    "jobAddress": "南京東路",
+                    "jobName": "Platform Engineer",
+                    "link": {
+                        "job": "https://www.104.com.tw/job/taghit1",
+                        "cust": "https://www.104.com.tw/company/tag-company",
+                    },
+                    "pcSkills": [{"description": "Backend"}],
+                    "tags": {},
+                }
+            ],
+            "metadata": {
+                "pagination": {"count": 30, "currentPage": 1, "lastPage": 1, "total": 1}
+            },
+        }
+
+        with patch("crawler.sites.site104._fetch_search_api_page", return_value=api_response):
+            parsed = adapter.parse_page(
+                JOB104_SEARCH_URL,
+                "<html><head><title>104 工作搜尋</title></head><body></body></html>",
+                "後端",
+            )
+
+        self.assertEqual(len(parsed.matches), 1)
+        self.assertEqual(parsed.matches[0]["matched_fields"], ["tags"])
+
 
 if __name__ == "__main__":
     unittest.main()
