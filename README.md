@@ -137,12 +137,27 @@ crawl-site 104 "後端" --sync-google-sheet
 crawl-site cake "後端" --sync-google-sheet --send-email-notification
 ```
 
+`104` 也可以直接同步後寄通知信：
+
+```bash
+crawl-site 104 "後端" --sync-google-sheet --send-email-notification
+```
+
 ### 強制重建 Google Sheet 後重跑
 
 這條會清空工作表再重建，平常不要亂下：
 
 ```bash
 crawl-site cake "後端" \
+  --sync-google-sheet \
+  --reset-google-sheet \
+  --send-email-notification
+```
+
+如果你要重建 `104_jobs` 工作表，也是一樣的用法：
+
+```bash
+crawl-site 104 "後端" \
   --sync-google-sheet \
   --reset-google-sheet \
   --send-email-notification
@@ -234,12 +249,20 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 
 `https://www.104.com.tw/jobs/search/?keyword={keyword}`
 
+實作上會先 request 搜尋頁建立匿名 session，再帶 cookie 去打搜尋 API。
+目前預設會把結果寫到 `104_jobs` worksheet。
+
 例如：
 
 - `後端`
 - `前端`
 - `python`
 - `react`
+
+備註：
+
+- `104` 的結構化欄位沒有 Cake 那麼完整，像 `employment_type`、`seniority_level`、`experience_required_years` 等欄位目前可能為空
+- 薪資資料會盡量保守保留原始數字，不會主動猜測月薪或年薪單位
 
 ### Cake
 
