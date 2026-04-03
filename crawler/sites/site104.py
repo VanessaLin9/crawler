@@ -149,9 +149,11 @@ def _entity_to_match(entity: dict, search_terms: list[str]) -> dict:
         matched_fields.append("tags")
         matched_terms.extend(tag_hit_terms)
 
-    salary_min = _stringify_salary(entity.get("salaryLow"))
-    salary_max = _stringify_salary(entity.get("salaryHigh"))
-    salary_currency = "TWD" if salary_min or salary_max else ""
+    salary_min, salary_max, salary_currency, salary_type = _normalize_salary(
+        entity,
+        title,
+        summary,
+    )
 
     return {
         "type": "job_card",
@@ -170,8 +172,13 @@ def _entity_to_match(entity: dict, search_terms: list[str]) -> dict:
         "salary_min": salary_min,
         "salary_max": salary_max,
         "salary_currency": salary_currency,
-        "salary_type": "",
-        "salary_display": _format_salary_display(salary_min, salary_max, salary_currency),
+        "salary_type": salary_type,
+        "salary_display": _format_salary_display(
+            salary_min,
+            salary_max,
+            salary_currency,
+            salary_type,
+        ),
         "openings_count": "",
         "employment_type": "",
         "seniority_level": "",
@@ -217,6 +224,7 @@ def _format_salary_display(
     salary_min: str,
     salary_max: str,
     salary_currency: str,
+    salary_type: str,
 ) -> str:
     if not (salary_min or salary_max):
         return ""
@@ -228,7 +236,49 @@ def _format_salary_display(
     parts = [range_display]
     if salary_currency:
         parts.append(salary_currency)
+    if salary_type and salary_type != "unknown":
+        parts.append(salary_type)
     return " ".join(parts)
+
+
+def _normalize_salary(
+    entity: dict,
+    title: str,
+    summary: str,
+) -> tuple[str, str, str, str]:
+    salary_min = _stringify_salary(entity.get("salaryLow"))
+    salary_max = _stringify_salary(entity.get("salaryHigh"))
+
+    # 104 sometimes uses 9999999 as an open-ended upper bound placeholder.
+    if salary_max == "9999999":
+        salary_max = ""
+
+    if salary_min and salary_max:
+        try:
+            if int(salary_max) < int(salary_min):
+                salary_max = ""
+        except ValueError:
+            pass
+
+    salary_currency = "TWD" if salary_min or salary_max else ""
+    salary_type = _extract_salary_type(title, summary) if salary_currency else ""
+    return salary_min, salary_max, salary_currency, salary_type
+
+
+def _extract_salary_type(*texts: str) -> str:
+    combined = " ".join(texts)
+    markers = [
+        ("月薪", "per_month"),
+        ("年薪", "per_year"),
+        ("時薪", "per_hour"),
+        ("日薪", "per_day"),
+    ]
+    matched_types = [value for marker, value in markers if marker in combined]
+    if len(matched_types) == 1:
+        return matched_types[0]
+    if len(matched_types) > 1:
+        return "unknown"
+    return "unknown"
 
 
 def _format_appear_date(value: str) -> str:

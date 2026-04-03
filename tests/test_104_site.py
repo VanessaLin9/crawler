@@ -73,6 +73,7 @@ class OneOhFourSiteAdapterTests(unittest.TestCase):
         self.assertEqual(match["salary_min"], "50000")
         self.assertEqual(match["salary_max"], "75000")
         self.assertEqual(match["salary_currency"], "TWD")
+        self.assertEqual(match["salary_type"], "unknown")
         self.assertEqual(match["salary_display"], "50000 - 75000 TWD")
         self.assertEqual(match["tags"], "TypeScript, NestJS, 遠端工作")
         self.assertEqual(match["content_updated_at"], "2026-03-27")
@@ -171,6 +172,47 @@ class OneOhFourSiteAdapterTests(unittest.TestCase):
 
         self.assertEqual(len(parsed.matches), 1)
         self.assertEqual(parsed.matches[0]["matched_fields"], ["tags"])
+
+    def test_parse_page_cleans_open_ended_salary_and_detects_monthly_type(self) -> None:
+        adapter = OneOhFourJobsAdapter("後端", per_page=30)
+        api_response = {
+            "data": [
+                {
+                    "appearDate": "20260327",
+                    "custName": "月薪測試公司",
+                    "description": "後端 API 與資料服務開發。",
+                    "descSnippet": "後端 API 與資料服務開發。",
+                    "jobAddrNoDesc": "台北市信義區",
+                    "jobAddress": "松高路",
+                    "jobName": "後端工程師（Junior）月薪40,000~65,000",
+                    "link": {
+                        "job": "https://www.104.com.tw/job/salary1",
+                        "cust": "https://www.104.com.tw/company/salary-company",
+                    },
+                    "salaryLow": 40000,
+                    "salaryHigh": 9999999,
+                    "pcSkills": [],
+                    "tags": {},
+                }
+            ],
+            "metadata": {
+                "pagination": {"count": 30, "currentPage": 1, "lastPage": 1, "total": 1}
+            },
+        }
+
+        with patch("crawler.sites.site104._fetch_search_api_page", return_value=api_response):
+            parsed = adapter.parse_page(
+                JOB104_SEARCH_URL,
+                "<html><head><title>104 工作搜尋</title></head><body></body></html>",
+                "後端",
+            )
+
+        self.assertEqual(len(parsed.matches), 1)
+        match = parsed.matches[0]
+        self.assertEqual(match["salary_min"], "40000")
+        self.assertEqual(match["salary_max"], "")
+        self.assertEqual(match["salary_type"], "per_month")
+        self.assertEqual(match["salary_display"], "40000 TWD per_month")
 
 
 if __name__ == "__main__":
