@@ -128,6 +128,7 @@ def main() -> None:
             service_account_path=args.google_service_account,
             reset_sheet=args.reset_google_sheet,
         )
+        crawl_issues = _extract_crawl_issues(results)
         print(
             f"Synced {sync_result.appended_count} new rows to "
             f"{sync_result.sheet_name}; skipped {sync_result.skipped_count} duplicates."
@@ -135,7 +136,7 @@ def main() -> None:
 
         if args.send_email_notification:
             _validate_email_args(args)
-            if sync_result.appended_records:
+            if sync_result.appended_records or crawl_issues:
                 base_smtp_config = SmtpConfig(
                     host=args.smtp_host,
                     port=args.smtp_port,
@@ -174,10 +175,18 @@ def main() -> None:
                     records=sync_result.appended_records,
                     sheet_name=sync_result.sheet_name,
                     spreadsheet_id=sync_result.spreadsheet_id,
+                    crawl_issues=crawl_issues,
                 )
-                print(
-                    f"Sent email notification for {len(sync_result.appended_records)} new jobs."
-                )
+                if crawl_issues:
+                    print(
+                        "Sent email notification with crawl issues for "
+                        f"{len(sync_result.appended_records)} new jobs."
+                    )
+                else:
+                    print(
+                        "Sent email notification for "
+                        f"{len(sync_result.appended_records)} new jobs."
+                    )
             else:
                 print("No new jobs found; skipped email notification.")
     elif args.send_email_notification:
@@ -212,6 +221,17 @@ def _resolve_google_sheet_name(
 def _default_google_sheet_name(site: str) -> str:
     normalized_site = site.strip().casefold()
     return f"{normalized_site}_jobs"
+
+
+def _extract_crawl_issues(results: list[dict]) -> list[str]:
+    issues: list[str] = []
+    for result in results:
+        error = str(result.get("error", "")).strip()
+        if not error:
+            continue
+        url = str(result.get("url", "")).strip()
+        issues.append(f"{error} (page: {url})" if url else error)
+    return issues
 
 
 def _validate_email_args(args: argparse.Namespace) -> None:

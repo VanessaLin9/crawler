@@ -1,6 +1,10 @@
 import unittest
 
-from crawler.cli import _default_google_sheet_name, _resolve_google_sheet_name
+from crawler.cli import (
+    _default_google_sheet_name,
+    _extract_crawl_issues,
+    _resolve_google_sheet_name,
+)
 
 
 class CliTests(unittest.TestCase):
@@ -36,6 +40,21 @@ class CliTests(unittest.TestCase):
                 env_name="cake_jobs",
             ),
             "104_jobs",
+        )
+
+    def test_extract_crawl_issues_includes_page_url(self) -> None:
+        self.assertEqual(
+            _extract_crawl_issues(
+                [
+                    {
+                        "url": "https://www.104.com.tw/jobs/search/?keyword=%E5%BE%8C%E7%AB%AF",
+                        "error": "104 search API request failed after establishing an anonymous session. Cookie/session behavior may have changed.",
+                    }
+                ]
+            ),
+            [
+                "104 search API request failed after establishing an anonymous session. Cookie/session behavior may have changed. (page: https://www.104.com.tw/jobs/search/?keyword=%E5%BE%8C%E7%AB%AF)"
+            ],
         )
 
 

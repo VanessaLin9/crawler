@@ -30,12 +30,13 @@ def send_new_jobs_email(
     records: list[JobRecord],
     sheet_name: str,
     spreadsheet_id: str,
+    crawl_issues: list[str] | None = None,
 ) -> None:
-    if not records:
+    if not records and not crawl_issues:
         return
 
     message = EmailMessage()
-    message["Subject"] = _build_subject(site, keyword, len(records))
+    message["Subject"] = _build_subject(site, keyword, len(records), crawl_issues or [])
     message["From"] = smtp_config.from_email
     message["To"] = smtp_config.to_email
     message["Date"] = formatdate(localtime=True)
@@ -46,6 +47,7 @@ def send_new_jobs_email(
             records=records,
             sheet_name=sheet_name,
             spreadsheet_id=spreadsheet_id,
+            crawl_issues=crawl_issues or [],
         )
     )
     _send_message(smtp_config, message)
@@ -81,7 +83,9 @@ def send_new_jobs_json_email(
     _send_message(smtp_config, message)
 
 
-def _build_subject(site: str, keyword: str, count: int) -> str:
+def _build_subject(site: str, keyword: str, count: int, crawl_issues: list[str] | None = None) -> str:
+    if crawl_issues:
+        return f"[Crawler Alert] {site} {keyword} issues detected"
     return f"[Crawler] {site} {keyword} new jobs: {count}"
 
 
@@ -95,7 +99,9 @@ def _build_plain_text_body(
     records: list[JobRecord],
     sheet_name: str,
     spreadsheet_id: str,
+    crawl_issues: list[str] | None = None,
 ) -> str:
+    issues = crawl_issues or []
     lines = [
         f"Site: {site}",
         f"Keyword: {keyword}",
@@ -104,6 +110,15 @@ def _build_plain_text_body(
         f"Worksheet: {sheet_name}",
         "",
     ]
+
+    if issues:
+        lines.extend(
+            [
+                "Crawl issues detected:",
+                *[f"- {issue}" for issue in issues],
+                "",
+            ]
+        )
 
     for index, record in enumerate(records, start=1):
         lines.extend(

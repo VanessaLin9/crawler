@@ -214,6 +214,20 @@ class OneOhFourSiteAdapterTests(unittest.TestCase):
         self.assertEqual(match["salary_type"], "per_month")
         self.assertEqual(match["salary_display"], "40000 TWD per_month")
 
+    def test_parse_page_raises_clear_error_when_api_fetch_fails(self) -> None:
+        adapter = OneOhFourJobsAdapter("後端", per_page=30)
+
+        with patch("crawler.sites.site104._fetch_search_api_page", return_value=None):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Cookie/session behavior may have changed",
+            ):
+                adapter.parse_page(
+                    JOB104_SEARCH_URL,
+                    "<html><head><title>104 工作搜尋</title></head><body></body></html>",
+                    "後端",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

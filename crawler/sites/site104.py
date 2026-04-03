@@ -68,11 +68,14 @@ class OneOhFourJobsAdapter(SiteAdapter):
         document = parse_html_document(url, html)
         current_page = _extract_page_number(url)
         search_terms = _expand_search_terms(keyword)
-        api_response = _fetch_search_api_page(keyword, current_page, self.per_page)
-        matches = _parse_api_job_matches(api_response, search_terms) if api_response else []
+        api_response = _fetch_search_api_page_or_raise(
+            keyword,
+            current_page,
+            self.per_page,
+        )
+        matches = _parse_api_job_matches(api_response, search_terms)
         links = list(document.links)
-        if api_response:
-            links.extend(_build_pagination_links(keyword, current_page, api_response))
+        links.extend(_build_pagination_links(keyword, current_page, api_response))
 
         return ParsedPage(
             title=document.title,
@@ -405,3 +408,18 @@ def _fetch_search_api_page(
         return json.loads(payload)
     except json.JSONDecodeError:
         return None
+
+
+def _fetch_search_api_page_or_raise(
+    keyword: str,
+    page_number: int,
+    per_page: int,
+) -> dict:
+    response = _fetch_search_api_page(keyword, page_number, per_page)
+    if response is not None:
+        return response
+
+    raise RuntimeError(
+        "104 search API request failed after establishing an anonymous session. "
+        "Cookie/session behavior may have changed."
+    )
