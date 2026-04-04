@@ -17,6 +17,12 @@ class EmailerTests(unittest.TestCase):
             "[Crawler] cake 後端 new jobs: 3",
         )
 
+    def test_build_subject_uses_alert_prefix_when_crawl_issues_exist(self) -> None:
+        self.assertEqual(
+            _build_subject("104", "後端", 0, ["104 API failed"]),
+            "[Crawler Alert] 104 後端 issues detected",
+        )
+
     def test_build_plain_text_body_lists_new_jobs(self) -> None:
         body = _build_plain_text_body(
             site="cake",
@@ -59,6 +65,22 @@ class EmailerTests(unittest.TestCase):
         self.assertIn("Salary: 100000 - 150000 TWD per_month", body)
         self.assertIn("Worksheet: cake_jobs", body)
         self.assertIn("https://docs.google.com/spreadsheets/d/sheet123/edit", body)
+
+    def test_build_plain_text_body_lists_crawl_issues(self) -> None:
+        body = _build_plain_text_body(
+            site="104",
+            keyword="後端",
+            records=[],
+            sheet_name="104_jobs",
+            spreadsheet_id="sheet123",
+            crawl_issues=[
+                "104 search API request failed after establishing an anonymous session. Cookie/session behavior may have changed. (page: https://www.104.com.tw/jobs/search/?keyword=%E5%BE%8C%E7%AB%AF)"
+            ],
+        )
+
+        self.assertIn("New jobs: 0", body)
+        self.assertIn("Crawl issues detected:", body)
+        self.assertIn("Cookie/session behavior may have changed", body)
 
     def test_build_json_subject_includes_site_keyword_and_count(self) -> None:
         self.assertEqual(

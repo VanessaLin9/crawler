@@ -6,6 +6,7 @@ from crawler.core.models import CrawlConfig
 from crawler.sites.cake import CakeItJobsAdapter
 from crawler.sites.base import SiteAdapter
 from crawler.sites.generic import build_generic_adapter
+from crawler.sites.site104 import OneOhFourJobsAdapter
 
 AdapterFactory = Callable[[CrawlConfig], SiteAdapter]
 
@@ -15,6 +16,10 @@ def _build_generic_from_config(config: CrawlConfig) -> SiteAdapter:
 
 
 REGISTRY: dict[str, AdapterFactory] = {
+    "104": lambda config: OneOhFourJobsAdapter(
+        config.keyword,
+        per_page=config.per_page,
+    ),
     "cake": lambda config: CakeItJobsAdapter(
         config.keyword,
         per_page=config.per_page,

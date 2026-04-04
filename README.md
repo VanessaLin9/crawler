@@ -1,6 +1,6 @@
 # Search Crawler
 
-用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成第一個 provider：`Cake`。
+用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成兩個 provider：`Cake` 與 `104`。
 
 這個專案目前已經打通：
 
@@ -33,7 +33,6 @@ cp .env.sample .env
 然後編輯 `.env`，至少填這些：
 
 - `GOOGLE_SHEET_ID`
-- `GOOGLE_SHEET_NAME`
 - `GOOGLE_SERVICE_ACCOUNT_JSON`
 - `SMTP_HOST`
 - `SMTP_PORT`
@@ -54,8 +53,8 @@ cp .env.sample .env
 
 - `GOOGLE_SHEET_ID`: Google Sheet 的 spreadsheet ID
   可以從 Google Sheet URL 中間那段拿到
-- `GOOGLE_SHEET_NAME`: 要寫入的工作表名稱
-  例如 `cake_jobs`
+- `GOOGLE_SHEET_NAME`: 可選，自訂要寫入的工作表名稱
+  如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: Google service account JSON 檔案路徑
   例如 `secrets/google-service-account.json`
 - `SMTP_HOST`: SMTP 伺服器位址
@@ -85,9 +84,13 @@ cp .env.sample .env
 
 ```env
 GOOGLE_SHEET_ID=your_google_sheet_id
-GOOGLE_SHEET_NAME=cake_jobs
 GOOGLE_SERVICE_ACCOUNT_JSON=secrets/google-service-account.json
 ```
+
+如果你不特別指定 worksheet，程式會自動用站台名稱分流：
+
+- `cake` -> `cake_jobs`
+- `104` -> `104_jobs`
 
 ## 最常用指令
 
@@ -110,16 +113,34 @@ crawl-site --list-sites
 crawl-site cake "後端"
 ```
 
+也可以直接跑 104：
+
+```bash
+crawl-site 104 "後端"
+```
+
 ### 爬完後同步到 Google Sheet
 
 ```bash
 crawl-site cake "後端" --sync-google-sheet
 ```
 
+對 `104` 也是同樣用法，預設會寫到 `104_jobs`：
+
+```bash
+crawl-site 104 "後端" --sync-google-sheet
+```
+
 ### 爬完後同步到 Google Sheet，並寄通知信
 
 ```bash
 crawl-site cake "後端" --sync-google-sheet --send-email-notification
+```
+
+`104` 也可以直接同步後寄通知信：
+
+```bash
+crawl-site 104 "後端" --sync-google-sheet --send-email-notification
 ```
 
 ### 強制重建 Google Sheet 後重跑
@@ -133,12 +154,29 @@ crawl-site cake "後端" \
   --send-email-notification
 ```
 
+如果你要重建 `104_jobs` 工作表，也是一樣的用法：
+
+```bash
+crawl-site 104 "後端" \
+  --sync-google-sheet \
+  --reset-google-sheet \
+  --send-email-notification
+```
+
 ### 換關鍵字搜尋
 
 例如改成搜尋前端：
 
 ```bash
 crawl-site cake "前端" --sync-google-sheet --send-email-notification
+```
+
+### 手動指定 worksheet
+
+平常你不用管這個，只有你想故意寫到另一張工作表時才需要：
+
+```bash
+crawl-site 104 "後端" --sync-google-sheet --google-sheet-name my_custom_jobs
 ```
 
 ## 預設設定
@@ -201,8 +239,30 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 
 ## 目前支援的站點
 
+- `104`
 - `cake`
 - `generic`
+
+### 104
+
+`104` 目前走搜尋頁對應的 API：
+
+`https://www.104.com.tw/jobs/search/?keyword={keyword}`
+
+實作上會先 request 搜尋頁建立匿名 session，再帶 cookie 去打搜尋 API。
+目前預設會把結果寫到 `104_jobs` worksheet。
+
+例如：
+
+- `後端`
+- `前端`
+- `python`
+- `react`
+
+備註：
+
+- `104` 的結構化欄位沒有 Cake 那麼完整，像 `employment_type`、`seniority_level`、`experience_required_years` 等欄位目前可能為空
+- 薪資資料會盡量保守保留原始數字，不會主動猜測月薪或年薪單位
 
 ### Cake
 
