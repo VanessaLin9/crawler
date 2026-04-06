@@ -50,6 +50,13 @@ class SiteRunSummary:
     error: str = ""
 
 
+class SiteRunFailed(RuntimeError):
+    def __init__(self, summary: SiteRunSummary, message: str) -> None:
+        super().__init__(message)
+        summary.error = message
+        self.summary = summary
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Keyword-based website crawler")
     parser.add_argument("site", nargs="?")
@@ -130,6 +137,7 @@ def main() -> None:
 
     if multi_site:
         _print_multi_site_summary(summaries, sync_google_sheet=args.sync_google_sheet)
+        _raise_for_failed_sites(summaries)
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -264,73 +272,79 @@ def _build_smtp_config(args: argparse.Namespace) -> SmtpConfig:
 
 def _run_site(args: argparse.Namespace, site: str, multi_site: bool) -> SiteRunSummary:
     output_path = _resolve_output_path(args.output, site, multi_site)
-    config = _build_crawl_config(args, site, output_path)
-    results = crawl(config)
-    records = flatten_job_records(results)
-    crawl_issues = _extract_crawl_issues(results)
     summary = SiteRunSummary(
         site=site,
         output_path=output_path,
-        crawled_pages=len(results),
-        records_found=len(records),
-        crawl_issues=crawl_issues,
+        crawled_pages=0,
+        records_found=0,
     )
 
-    if not args.sync_google_sheet:
-        return summary
+    try:
+        config = _build_crawl_config(args, site, output_path)
+        results = crawl(config)
+        records = flatten_job_records(results)
+        crawl_issues = _extract_crawl_issues(results)
+        summary.crawled_pages = len(results)
+        summary.records_found = len(records)
+        summary.crawl_issues = crawl_issues
 
-    sheet_name = _resolve_google_sheet_name(
-        site=site,
-        explicit_name=args.google_sheet_name,
-        env_name=os.getenv("GOOGLE_SHEET_NAME"),
-    )
-    sync_result = sync_job_records(
-        records=records,
-        spreadsheet_id=args.google_sheet_id,
-        sheet_name=sheet_name,
-        service_account_path=args.google_service_account,
-        reset_sheet=args.reset_google_sheet,
-    )
-    summary.appended_count = sync_result.appended_count
-    summary.skipped_count = sync_result.skipped_count
-    summary.sheet_name = sync_result.sheet_name
+        if not args.sync_google_sheet:
+            return summary
 
-    if not args.send_email_notification:
-        return summary
+        sheet_name = _resolve_google_sheet_name(
+            site=site,
+            explicit_name=args.google_sheet_name,
+            env_name=os.getenv("GOOGLE_SHEET_NAME"),
+        )
+        sync_result = sync_job_records(
+            records=records,
+            spreadsheet_id=args.google_sheet_id,
+            sheet_name=sheet_name,
+            service_account_path=args.google_service_account,
+            reset_sheet=args.reset_google_sheet,
+        )
+        summary.appended_count = sync_result.appended_count
+        summary.skipped_count = sync_result.skipped_count
+        summary.sheet_name = sync_result.sheet_name
 
-    if sync_result.appended_records or crawl_issues:
-        base_smtp_config = _build_smtp_config(args)
-        if args.send_machine_email_notification and sync_result.appended_records:
-            send_new_jobs_json_email(
-                smtp_config=SmtpConfig(
-                    host=base_smtp_config.host,
-                    port=base_smtp_config.port,
-                    username=base_smtp_config.username,
-                    password=base_smtp_config.password,
-                    from_email=base_smtp_config.from_email,
-                    to_email=args.machine_email_to,
-                    use_tls=base_smtp_config.use_tls,
-                ),
+        if not args.send_email_notification:
+            return summary
+
+        if sync_result.appended_records or crawl_issues:
+            base_smtp_config = _build_smtp_config(args)
+            if args.send_machine_email_notification and sync_result.appended_records:
+                send_new_jobs_json_email(
+                    smtp_config=SmtpConfig(
+                        host=base_smtp_config.host,
+                        port=base_smtp_config.port,
+                        username=base_smtp_config.username,
+                        password=base_smtp_config.password,
+                        from_email=base_smtp_config.from_email,
+                        to_email=args.machine_email_to,
+                        use_tls=base_smtp_config.use_tls,
+                    ),
+                    site=site,
+                    keyword=args.keyword,
+                    records=sync_result.appended_records,
+                    sheet_name=sync_result.sheet_name,
+                    spreadsheet_id=sync_result.spreadsheet_id,
+                )
+                summary.sent_machine_email = True
+
+            send_new_jobs_email(
+                smtp_config=base_smtp_config,
                 site=site,
                 keyword=args.keyword,
                 records=sync_result.appended_records,
                 sheet_name=sync_result.sheet_name,
                 spreadsheet_id=sync_result.spreadsheet_id,
+                crawl_issues=crawl_issues,
             )
-            summary.sent_machine_email = True
+            summary.sent_email = True
 
-        send_new_jobs_email(
-            smtp_config=base_smtp_config,
-            site=site,
-            keyword=args.keyword,
-            records=sync_result.appended_records,
-            sheet_name=sync_result.sheet_name,
-            spreadsheet_id=sync_result.spreadsheet_id,
-            crawl_issues=crawl_issues,
-        )
-        summary.sent_email = True
-
-    return summary
+        return summary
+    except Exception as exc:
+        raise SiteRunFailed(summary, str(exc)) from exc
 
 
 def _execute_requested_sites(
@@ -343,6 +357,10 @@ def _execute_requested_sites(
     for site in sites:
         try:
             summaries.append(_run_site(args, site, multi_site=multi_site))
+        except SiteRunFailed as exc:
+            if not multi_site:
+                raise
+            summaries.append(exc.summary)
         except Exception as exc:
             if not multi_site:
                 raise
@@ -419,6 +437,12 @@ def _print_multi_site_summary(
     failed_sites = [summary.site for summary in summaries if summary.error]
     if failed_sites:
         print(f"Providers failed: {', '.join(failed_sites)}")
+
+
+def _raise_for_failed_sites(summaries: list[SiteRunSummary]) -> None:
+    failed_sites = [summary.site for summary in summaries if summary.error]
+    if failed_sites:
+        raise SystemExit(1)
 
 
 def _validate_email_args(args: argparse.Namespace) -> None:

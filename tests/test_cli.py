@@ -5,11 +5,13 @@ from unittest.mock import patch
 
 from crawler.cli import (
     ALL_SITES_TOKEN,
+    SiteRunFailed,
     SiteRunSummary,
     _default_google_sheet_name,
     _execute_requested_sites,
     _extract_crawl_issues,
     _list_cli_sites,
+    _raise_for_failed_sites,
     _resolve_google_sheet_name,
     _resolve_output_path,
     _resolve_requested_sites,
@@ -134,7 +136,18 @@ class CliTests(unittest.TestCase):
         with patch(
             "crawler.cli._run_site",
             side_effect=[
-                RuntimeError("cake failed"),
+                SiteRunFailed(
+                    SiteRunSummary(
+                        site="cake",
+                        output_path="data/results-cake.jsonl",
+                        crawled_pages=4,
+                        records_found=10,
+                        appended_count=3,
+                        skipped_count=7,
+                        sheet_name="cake_jobs",
+                    ),
+                    "cake failed",
+                ),
                 SiteRunSummary(
                     site="104",
                     output_path="data/results-104.jsonl",
@@ -149,8 +162,50 @@ class CliTests(unittest.TestCase):
         self.assertEqual(summaries[0].site, "cake")
         self.assertEqual(summaries[0].error, "cake failed")
         self.assertEqual(summaries[0].output_path, "data/results-cake.jsonl")
+        self.assertEqual(summaries[0].appended_count, 3)
+        self.assertEqual(summaries[0].sheet_name, "cake_jobs")
         self.assertEqual(summaries[1].site, "104")
         self.assertEqual(summaries[1].records_found, 8)
+
+    def test_raise_for_failed_sites_raises_non_zero_exit(self) -> None:
+        with self.assertRaises(SystemExit) as exc:
+            _raise_for_failed_sites(
+                [
+                    SiteRunSummary(
+                        site="cake",
+                        output_path="data/results-cake.jsonl",
+                        crawled_pages=3,
+                        records_found=8,
+                    ),
+                    SiteRunSummary(
+                        site="104",
+                        output_path="data/results-104.jsonl",
+                        crawled_pages=3,
+                        records_found=8,
+                        error="104 failed",
+                    ),
+                ]
+            )
+
+        self.assertEqual(exc.exception.code, 1)
+
+    def test_raise_for_failed_sites_allows_successful_multi_site_run(self) -> None:
+        _raise_for_failed_sites(
+            [
+                SiteRunSummary(
+                    site="cake",
+                    output_path="data/results-cake.jsonl",
+                    crawled_pages=3,
+                    records_found=8,
+                ),
+                SiteRunSummary(
+                    site="104",
+                    output_path="data/results-104.jsonl",
+                    crawled_pages=3,
+                    records_found=8,
+                ),
+            ]
+        )
 
 
 if __name__ == "__main__":
