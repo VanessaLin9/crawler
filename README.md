@@ -143,6 +143,28 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 crawl-site 104 "後端" --sync-google-sheet --send-email-notification
 ```
 
+### 一次跑多個 provider
+
+如果你想一次跑完目前支援的主要 provider，可以用：
+
+```bash
+crawl-site all "後端" --sync-google-sheet --send-email-notification --send-machine-email-notification
+```
+
+這會：
+
+- 先跑 `cake`
+- 再跑 `104`
+- 分別寫入 `cake_jobs` 與 `104_jobs`
+- 各自寄出人類摘要信與 JSON 通知信
+- 最後在 terminal 印出 total summary
+
+第一版限制：
+
+- `all` 模式不支援共用 `--google-sheet-name`
+- 如果其中一個 provider 失敗，另一個 provider 仍會繼續跑
+- 只要任一 provider 失敗，整體 CLI exit code 會是 `1`
+
 ### 強制重建 Google Sheet 後重跑
 
 這條會清空工作表再重建，平常不要亂下：
@@ -161,6 +183,16 @@ crawl-site 104 "後端" \
   --sync-google-sheet \
   --reset-google-sheet \
   --send-email-notification
+```
+
+如果你要重建 `all` 模式下的 provider worksheet，也可以直接加在 `all` 指令上：
+
+```bash
+crawl-site all "後端" \
+  --sync-google-sheet \
+  --reset-google-sheet \
+  --send-email-notification \
+  --send-machine-email-notification
 ```
 
 ### 換關鍵字搜尋
@@ -219,6 +251,63 @@ JSON 信是可選功能，預設關閉。
 MACHINE_EMAIL_ENABLED=true
 MACHINE_EMAIL_TO=machine-consumer@example.com
 ```
+
+## GitHub Actions
+
+如果你不想在本機跑 `cron`，這個 repo 也可以直接用 GitHub Actions 來手動觸發爬蟲。
+
+目前已提供 workflow：
+
+- [.github/workflows/crawl-jobs.yml](/Users/vanessa/develop/search/.github/workflows/crawl-jobs.yml)
+
+這個 workflow 目前先走 `workflow_dispatch`，也就是：
+
+- 你先手動按 Run workflow
+- 確認 GitHub runner 對 `Cake` / `104` 的連線行為穩定
+- 穩定後再決定要不要補 `schedule`
+
+### 需要設定的 GitHub Secrets
+
+請到 GitHub repo 的 Settings -> Secrets and variables -> Actions，建立這些 secrets：
+
+- `GOOGLE_SHEET_ID`
+- `GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_TO_EMAIL`
+- `MACHINE_EMAIL_ENABLED`
+- `MACHINE_EMAIL_TO`
+
+其中：
+
+- `GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT` 要放的是整份 service account JSON 內容，不是檔案路徑
+- workflow 執行時會把它寫成 runner 上的暫存檔，再設定給 `GOOGLE_SERVICE_ACCOUNT_JSON`
+
+### Workflow 目前會做什麼
+
+- checkout repo
+- 安裝 Python 與套件
+- 把 Google service account JSON secret 寫成暫存檔
+- 執行：
+
+```bash
+python -m crawler.cli all "<keyword>" \
+  --sync-google-sheet \
+  --send-email-notification \
+  --send-machine-email-notification
+```
+
+### 為什麼先不直接加排程
+
+雖然輸出都在雲端，理論上很適合搬到 GitHub Actions，但 `104` 和 `Cake` 對 GitHub runner IP 的接受度還沒長期驗證過。  
+所以建議順序是：
+
+1. 先用手動觸發 workflow 驗證幾次
+2. 觀察 Google Sheet、email、與 104 session 行為是否穩定
+3. 確認穩定後，再補 `schedule`
 
 ## Google Sheet 去重規則
 
