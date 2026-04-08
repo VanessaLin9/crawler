@@ -118,6 +118,50 @@ class YouratorSiteAdapterTests(unittest.TestCase):
     @patch("crawler.sites.yourator._fetch_search_api_page")
     @patch("crawler.sites.yourator._fetch_job_detail")
     @patch("crawler.sites.yourator._fetch_jobs_api_page")
+    def test_parse_page_does_not_use_relative_last_active_text_as_content_updated_at(
+        self,
+        mock_fetch_jobs_api_page,
+        mock_fetch_job_detail,
+        mock_fetch_search_api_page,
+    ) -> None:
+        adapter = YouratorJobsAdapter("後端")
+        mock_fetch_jobs_api_page.return_value = {
+            "hasMore": False,
+            "currentPage": 1,
+            "nextPage": None,
+            "jobs": [
+                {
+                    "id": 46716,
+                    "name": "Backend Engineer",
+                    "path": "/companies/linkst/jobs/46716",
+                    "salary": "NT$ 36,000 - 40,000 (月薪)",
+                    "location": "臺北市",
+                    "tags": ["Backend"],
+                    "lastActiveAt": "一天內更新",
+                    "company": {
+                        "path": "/companies/linkst",
+                        "brand": "智林國際股份有限公司",
+                        "enName": "linkst",
+                    },
+                }
+            ],
+        }
+        mock_fetch_job_detail.return_value.summary = "負責後端 API 開發。"
+        mock_fetch_job_detail.return_value.content_updated_at = ""
+        mock_fetch_search_api_page.return_value = {"jobs": []}
+
+        parsed = adapter.parse_page(
+            "https://www.yourator.co/jobs",
+            "<html><head><title>Yourator Jobs</title></head><body></body></html>",
+            "後端",
+        )
+
+        self.assertEqual(len(parsed.matches), 1)
+        self.assertEqual(parsed.matches[0]["content_updated_at"], "")
+
+    @patch("crawler.sites.yourator._fetch_search_api_page")
+    @patch("crawler.sites.yourator._fetch_job_detail")
+    @patch("crawler.sites.yourator._fetch_jobs_api_page")
     def test_parse_page_merges_search_api_results_on_first_page(
         self,
         mock_fetch_jobs_api_page,

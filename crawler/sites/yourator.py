@@ -264,7 +264,7 @@ def _job_card_to_match(job: dict, search_terms: list[str], keyword: str) -> dict
         "experience_required_years": "",
         "management_responsibility": "",
         "tags": tags_text,
-        "content_updated_at": detail.content_updated_at or str(job.get("lastActiveAt", "")).strip(),
+        "content_updated_at": detail.content_updated_at,
     }
 
 

@@ -49,6 +49,7 @@ KEYWORD_GROUPS = [
         ],
     ),
 ]
+DATE_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}")
 
 
 @dataclass(slots=True)
@@ -511,10 +512,12 @@ def _structured_entity_to_match(entity: dict, search_terms: list[str]) -> dict:
             _get_entity_value(entity, "numberOfManagement", "number_of_management")
         ),
         "tags": ", ".join(tags),
-        "content_updated_at": _get_entity_value(
-            entity,
-            "contentUpdatedAt",
-            "content_updated_at",
+        "content_updated_at": _normalize_content_updated_at(
+            _get_entity_value(
+                entity,
+                "contentUpdatedAt",
+                "content_updated_at",
+            )
         ),
     }
 
@@ -531,6 +534,17 @@ def _stringify_optional(value: object) -> str:
     if value is None:
         return ""
     return str(value)
+
+
+def _normalize_content_updated_at(value: object) -> str:
+    text = _stringify_optional(value).strip()
+    if not text:
+        return ""
+
+    match = DATE_PREFIX_PATTERN.match(text)
+    if match:
+        return match.group(0)
+    return text
 
 
 def _get_entity_value(entity: dict, *keys: str) -> str:
