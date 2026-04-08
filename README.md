@@ -283,7 +283,7 @@ MACHINE_EMAIL_TO=machine-consumer@example.com
 這個 workflow 目前先走 `workflow_dispatch`，也就是：
 
 - 你先手動按 Run workflow
-- 確認 GitHub runner 對 `Cake` / `104` 的連線行為穩定
+- 確認 GitHub runner 對 `Cake` / `104` / `Yourator` 的連線行為穩定
 - 穩定後再決定要不要補 `schedule`
 
 ### 需要設定的 GitHub Secrets
@@ -322,7 +322,7 @@ python -m crawler.cli all "<keyword>" \
 
 ### 為什麼先不直接加排程
 
-雖然輸出都在雲端，理論上很適合搬到 GitHub Actions，但 `104` 和 `Cake` 對 GitHub runner IP 的接受度還沒長期驗證過。  
+雖然輸出都在雲端，理論上很適合搬到 GitHub Actions，但 `104`、`Cake` 與 `Yourator` 對 GitHub runner IP 的接受度還沒長期驗證過。  
 所以建議順序是：
 
 1. 先用手動觸發 workflow 驗證幾次
@@ -350,6 +350,7 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 
 - `104`
 - `cake`
+- `yourator`
 - `generic`
 
 ### 104
@@ -385,6 +386,28 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 - `前端`
 - `python`
 - `react`
+
+### Yourator
+
+`yourator` 目前以公開職缺列表 API 搭配公開職缺 detail page 補欄位：
+
+- list source: `https://www.yourator.co/api/v4/jobs?page={page}`
+- detail source: `https://www.yourator.co/companies/{company}/jobs/{job_id}`
+
+目前預設會把結果寫到 `yourator_jobs` worksheet。
+
+例如：
+
+- `後端`
+- `前端`
+- `python`
+- `react`
+
+備註：
+
+- 目前 V1 主要是從 jobs list 做本地 keyword match，屬於較保守的 matching 策略
+- `content_updated_at` 目前統一收斂成 `YYYY-MM-DD`
+- `面議（經常性薪資達X萬元）` 會保留 `negotiable`，同時把 `salary_min` 正規化成對應下限數字
 
 ### Generic
 
