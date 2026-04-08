@@ -6,7 +6,7 @@ from crawler.sites.registry import build_site_adapter, list_sites
 
 class SiteRegistryTests(unittest.TestCase):
     def test_list_sites_returns_registered_sites(self) -> None:
-        self.assertEqual(list_sites(), ["104", "cake", "generic"])
+        self.assertEqual(list_sites(), ["104", "cake", "generic", "yourator"])
 
     def test_build_site_adapter_returns_generic_adapter(self) -> None:
         config = CrawlConfig(
@@ -28,6 +28,12 @@ class SiteRegistryTests(unittest.TestCase):
         config = CrawlConfig(site="104", keyword="python")
         adapter = build_site_adapter(config)
         self.assertEqual(adapter.name, "104")
+        self.assertEqual(adapter.per_page, 20)
+
+    def test_build_site_adapter_returns_yourator_adapter(self) -> None:
+        config = CrawlConfig(site="yourator", keyword="python")
+        adapter = build_site_adapter(config)
+        self.assertEqual(adapter.name, "yourator")
         self.assertEqual(adapter.per_page, 20)
 
 

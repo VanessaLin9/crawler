@@ -7,6 +7,7 @@ from crawler.sites.cake import CakeItJobsAdapter
 from crawler.sites.base import SiteAdapter
 from crawler.sites.generic import build_generic_adapter
 from crawler.sites.site104 import OneOhFourJobsAdapter
+from crawler.sites.yourator import YouratorJobsAdapter
 
 AdapterFactory = Callable[[CrawlConfig], SiteAdapter]
 
@@ -26,6 +27,10 @@ REGISTRY: dict[str, AdapterFactory] = {
         use_search_api=True,
     ),
     "generic": _build_generic_from_config,
+    "yourator": lambda config: YouratorJobsAdapter(
+        config.keyword,
+        per_page=config.per_page,
+    ),
 }
 
 

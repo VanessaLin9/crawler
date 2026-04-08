@@ -73,7 +73,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(_list_cli_sites()[0], ALL_SITES_TOKEN)
 
     def test_resolve_requested_sites_expands_all_mode(self) -> None:
-        self.assertEqual(_resolve_requested_sites("all"), ["cake", "104"])
+        self.assertEqual(_resolve_requested_sites("all"), ["cake", "104", "yourator"])
 
     def test_resolve_output_path_adds_site_suffix_for_multi_site(self) -> None:
         self.assertEqual(

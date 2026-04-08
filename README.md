@@ -1,6 +1,6 @@
 # Search Crawler
 
-用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成兩個 provider：`Cake` 與 `104`。
+用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成三個 provider：`Cake`、`104` 與 `Yourator`。
 
 這個專案目前已經打通：
 
@@ -54,7 +54,7 @@ cp .env.sample .env
 - `GOOGLE_SHEET_ID`: Google Sheet 的 spreadsheet ID
   可以從 Google Sheet URL 中間那段拿到
 - `GOOGLE_SHEET_NAME`: 可選，自訂要寫入的工作表名稱
-  如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`
+  如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`、`yourator_jobs`
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: Google service account JSON 檔案路徑
   例如 `secrets/google-service-account.json`
 - `SMTP_HOST`: SMTP 伺服器位址
@@ -91,6 +91,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON=secrets/google-service-account.json
 
 - `cake` -> `cake_jobs`
 - `104` -> `104_jobs`
+- `yourator` -> `yourator_jobs`
 
 ## 最常用指令
 
@@ -119,6 +120,12 @@ crawl-site cake "後端"
 crawl-site 104 "後端"
 ```
 
+也可以直接跑 Yourator：
+
+```bash
+crawl-site yourator "後端"
+```
+
 ### 爬完後同步到 Google Sheet
 
 ```bash
@@ -129,6 +136,12 @@ crawl-site cake "後端" --sync-google-sheet
 
 ```bash
 crawl-site 104 "後端" --sync-google-sheet
+```
+
+對 `yourator` 也是同樣用法，預設會寫到 `yourator_jobs`：
+
+```bash
+crawl-site yourator "後端" --sync-google-sheet
 ```
 
 ### 爬完後同步到 Google Sheet，並寄通知信
@@ -143,6 +156,12 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 crawl-site 104 "後端" --sync-google-sheet --send-email-notification
 ```
 
+`yourator` 也可以直接同步後寄通知信：
+
+```bash
+crawl-site yourator "後端" --sync-google-sheet --send-email-notification
+```
+
 ### 一次跑多個 provider
 
 如果你想一次跑完目前支援的主要 provider，可以用：
@@ -155,7 +174,8 @@ crawl-site all "後端" --sync-google-sheet --send-email-notification --send-mac
 
 - 先跑 `cake`
 - 再跑 `104`
-- 分別寫入 `cake_jobs` 與 `104_jobs`
+- 再跑 `yourator`
+- 分別寫入 `cake_jobs`、`104_jobs` 與 `yourator_jobs`
 - 各自寄出人類摘要信與 JSON 通知信
 - 最後在 terminal 印出 total summary
 
