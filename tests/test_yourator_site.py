@@ -162,6 +162,55 @@ class YouratorSiteAdapterTests(unittest.TestCase):
     @patch("crawler.sites.yourator._fetch_search_api_page")
     @patch("crawler.sites.yourator._fetch_job_detail")
     @patch("crawler.sites.yourator._fetch_jobs_api_page")
+    def test_parse_page_normalizes_negotiable_salary_floor(
+        self,
+        mock_fetch_jobs_api_page,
+        mock_fetch_job_detail,
+        mock_fetch_search_api_page,
+    ) -> None:
+        adapter = YouratorJobsAdapter("後端")
+        mock_fetch_jobs_api_page.return_value = {
+            "hasMore": False,
+            "currentPage": 1,
+            "nextPage": None,
+            "jobs": [
+                {
+                    "id": 28715,
+                    "name": ".Net Engineer 後端工程師",
+                    "path": "/companies/tutorabc/jobs/28715",
+                    "salary": "面議（經常性薪資達4萬元）",
+                    "location": "臺北市",
+                    "tags": ["Backend Engineer"],
+                    "lastActiveAt": "一天內更新",
+                    "company": {
+                        "path": "/companies/tutorabc",
+                        "brand": "TutorABC",
+                        "enName": "tutorabc",
+                    },
+                }
+            ],
+        }
+        mock_fetch_job_detail.return_value.summary = "3年以上後端開發經驗尤佳。"
+        mock_fetch_job_detail.return_value.content_updated_at = "2026-04-08"
+        mock_fetch_search_api_page.return_value = {"jobs": []}
+
+        parsed = adapter.parse_page(
+            "https://www.yourator.co/jobs",
+            "<html><head><title>Yourator Jobs</title></head><body></body></html>",
+            "後端",
+        )
+
+        self.assertEqual(len(parsed.matches), 1)
+        match = parsed.matches[0]
+        self.assertEqual(match["salary_min"], "40000")
+        self.assertEqual(match["salary_max"], "")
+        self.assertEqual(match["salary_currency"], "TWD")
+        self.assertEqual(match["salary_type"], "negotiable")
+        self.assertEqual(match["salary_display"], "面議（經常性薪資達4萬元）")
+
+    @patch("crawler.sites.yourator._fetch_search_api_page")
+    @patch("crawler.sites.yourator._fetch_job_detail")
+    @patch("crawler.sites.yourator._fetch_jobs_api_page")
     def test_parse_page_merges_search_api_results_on_first_page(
         self,
         mock_fetch_jobs_api_page,

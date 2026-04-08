@@ -96,6 +96,7 @@ KEYWORD_GROUPS = [
 DETAIL_UPDATED_AT_PATTERN = re.compile(r"最近更新於\s*(\d{4}-\d{2}-\d{2})")
 TAG_PATTERN = re.compile(r"<[^>]+>")
 SALARY_NUMBER_PATTERN = re.compile(r"\d[\d,]*")
+NEGOTIABLE_FLOOR_PATTERN = re.compile(r"經常性薪資達\s*(\d+(?:\.\d+)?)\s*萬?元")
 
 
 @dataclass(slots=True)
@@ -472,7 +473,7 @@ def _normalize_salary(raw_salary: str) -> tuple[str, str, str, str]:
     if not salary_text:
         return "", "", "", ""
 
-    currency = "TWD" if "NT$" in salary_text else ""
+    currency = "TWD" if "NT$" in salary_text or "元" in salary_text else ""
     salary_type = "unknown"
     if "月薪" in salary_text:
         salary_type = "per_month"
@@ -485,6 +486,10 @@ def _normalize_salary(raw_salary: str) -> tuple[str, str, str, str]:
     elif "面議" in salary_text:
         salary_type = "negotiable"
 
+    negotiable_floor = _extract_negotiable_salary_floor(salary_text)
+    if negotiable_floor:
+        return negotiable_floor, "", currency, salary_type
+
     values = [number.replace(",", "") for number in SALARY_NUMBER_PATTERN.findall(salary_text)]
     if not values:
         return "", "", currency, salary_type
@@ -492,6 +497,21 @@ def _normalize_salary(raw_salary: str) -> tuple[str, str, str, str]:
     if len(values) == 1:
         return values[0], "", currency, salary_type
     return values[0], values[1], currency, salary_type
+
+
+def _extract_negotiable_salary_floor(salary_text: str) -> str:
+    match = NEGOTIABLE_FLOOR_PATTERN.search(salary_text)
+    if not match:
+        return ""
+
+    try:
+        floor = float(match.group(1)) * 10000
+    except ValueError:
+        return ""
+
+    if floor.is_integer():
+        return str(int(floor))
+    return str(int(floor))
 
 
 def _extract_page_number(url: str) -> int:
