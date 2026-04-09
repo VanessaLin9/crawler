@@ -1,6 +1,6 @@
 # Search Crawler
 
-中文版本: [README.md](/Users/vanessa/develop/search/README.md)
+中文版本: [README.md](README.md)
 
 A Python job-search crawler focused on Taiwanese job platforms. The project currently supports three providers: `Cake`, `104`, and `Yourator`.
 
@@ -78,7 +78,7 @@ If you do not specify a worksheet name, the crawler routes each provider to its 
 Assume you already ran:
 
 ```bash
-cd /Users/vanessa/develop/search
+cd /path/to/search
 source .venv/bin/activate
 ```
 
@@ -132,7 +132,7 @@ And writes to:
 
 ## Default Settings
 
-Current defaults are defined in [crawler/settings.py](/Users/vanessa/develop/search/crawler/settings.py):
+Current defaults are defined in [crawler/settings.py](crawler/settings.py):
 
 - `max_pages = 9`
 - `per_page = 20`
@@ -164,7 +164,7 @@ The JSON email is optional and disabled by default.
 
 The repo includes a workflow for running the crawler from GitHub Actions:
 
-- [.github/workflows/crawl-jobs.yml](/Users/vanessa/develop/search/.github/workflows/crawl-jobs.yml)
+- [.github/workflows/crawl-jobs.yml](.github/workflows/crawl-jobs.yml)
 
 It currently uses `workflow_dispatch` first, so you can validate connectivity and output quality before relying on a schedule.
 
@@ -235,11 +235,11 @@ When syncing to Google Sheets, the data is flattened to one row per job.
 
 To add a new site:
 
-1. Start from [template.py](/Users/vanessa/develop/search/crawler/sites/template.py).
+1. Start from [template.py](crawler/sites/template.py).
 2. Implement `build_start_urls()`.
 3. Implement `parse_page()`.
 4. Adjust `should_visit()` if needed.
-5. Register the site in [registry.py](/Users/vanessa/develop/search/crawler/sites/registry.py).
+5. Register the site in [registry.py](crawler/sites/registry.py).
 
 ## Notes
 

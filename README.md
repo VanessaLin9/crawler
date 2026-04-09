@@ -1,6 +1,6 @@
 # Search Crawler
 
-English version: [README.en.md](/Users/vanessa/develop/search/README.en.md)
+English version: [README.en.md](README.en.md)
 
 用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成三個 provider：`Cake`、`104` 與 `Yourator`。
 
@@ -100,7 +100,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON=secrets/google-service-account.json
 下面指令都假設你已經先：
 
 ```bash
-cd /Users/vanessa/develop/search
+cd /path/to/search
 source .venv/bin/activate
 ```
 
@@ -235,7 +235,7 @@ crawl-site 104 "後端" --sync-google-sheet --google-sheet-name my_custom_jobs
 
 ## 預設設定
 
-目前集中在 [crawler/settings.py](/Users/vanessa/develop/search/crawler/settings.py)：
+目前集中在 [crawler/settings.py](crawler/settings.py)：
 
 - `max_pages = 9`
 - `per_page = 20`
@@ -280,7 +280,7 @@ MACHINE_EMAIL_TO=machine-consumer@example.com
 
 目前已提供 workflow：
 
-- [.github/workflows/crawl-jobs.yml](/Users/vanessa/develop/search/.github/workflows/crawl-jobs.yml)
+- [.github/workflows/crawl-jobs.yml](.github/workflows/crawl-jobs.yml)
 
 這個 workflow 目前先走 `workflow_dispatch`，也就是：
 
@@ -469,11 +469,11 @@ crawl-site generic "openai" \
 
 ## 自己擴充新網站
 
-1. 以 [template.py](/Users/vanessa/develop/search/crawler/sites/template.py) 為基礎建立新的 adapter
+1. 以 [template.py](crawler/sites/template.py) 為基礎建立新的 adapter
 2. 實作 `build_start_urls()`
 3. 實作 `parse_page()`
 4. 視需要調整 `should_visit()`
-5. 在 [registry.py](/Users/vanessa/develop/search/crawler/sites/registry.py) 註冊站點名稱
+5. 在 [registry.py](crawler/sites/registry.py) 註冊站點名稱
 
 ## 注意事項
 
