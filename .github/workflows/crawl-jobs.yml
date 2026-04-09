@@ -1,6 +1,8 @@
 name: Crawl Jobs
 
 on:
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       keyword:
@@ -15,6 +17,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: crawl-jobs
+  cancel-in-progress: false
 
 jobs:
   crawl:
@@ -56,8 +62,8 @@ jobs:
 
       - name: Run multi-site crawler
         env:
-          KEYWORD: ${{ inputs.keyword }}
-          RESET_GOOGLE_SHEET: ${{ inputs.reset_google_sheet }}
+          KEYWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.keyword || '後端' }}
+          RESET_GOOGLE_SHEET: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_google_sheet || 'false' }}
         run: |
           command=(
             python -m crawler.cli all "$KEYWORD"

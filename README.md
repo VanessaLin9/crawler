@@ -276,17 +276,21 @@ MACHINE_EMAIL_TO=machine-consumer@example.com
 
 ## GitHub Actions
 
-如果你不想在本機跑 `cron`，這個 repo 也可以直接用 GitHub Actions 來手動觸發爬蟲。
+如果你不想在本機跑 `cron`，這個 repo 也可以直接用 GitHub Actions 來跑爬蟲。
 
 目前已提供 workflow：
 
 - [.github/workflows/crawl-jobs.yml](.github/workflows/crawl-jobs.yml)
 
-這個 workflow 目前先走 `workflow_dispatch`，也就是：
+這個 workflow 目前同時支援：
 
-- 你先手動按 Run workflow
-- 確認 GitHub runner 對 `Cake` / `104` / `Yourator` 的連線行為穩定
-- 穩定後再決定要不要補 `schedule`
+- `workflow_dispatch`：手動按 Run workflow
+- `schedule`：每天自動跑一次
+
+目前排程時間是：
+
+- 台灣時間每天 `09:00`
+- GitHub Actions `cron` 對應 `UTC 01:00`
 
 ### 需要設定的 GitHub Secrets
 
@@ -322,14 +326,25 @@ python -m crawler.cli all "<keyword>" \
   --send-machine-email-notification
 ```
 
-### 為什麼先不直接加排程
+### 手動與排程的差異
 
-雖然輸出都在雲端，理論上很適合搬到 GitHub Actions，但 `104`、`Cake` 與 `Yourator` 對 GitHub runner IP 的接受度還沒長期驗證過。  
-所以建議順序是：
+- 手動觸發時：
+  - 可以自訂 `keyword`
+  - 可以選擇是否加 `reset_google_sheet`
 
-1. 先用手動觸發 workflow 驗證幾次
-2. 觀察 Google Sheet、email、與 104 session 行為是否穩定
-3. 確認穩定後，再補 `schedule`
+- 排程觸發時：
+  - 固定用關鍵字 `後端`
+  - 不會自動加 `--reset-google-sheet`
+
+### 觀察重點
+
+雖然輸出都在雲端，理論上很適合搬到 GitHub Actions，但 `104`、`Cake` 與 `Yourator` 對 GitHub runner IP 的接受度還是值得持續觀察。  
+建議先看幾天：
+
+1. Google Sheet 是否都有正常新增資料
+2. email 是否穩定寄出
+3. `104` 是否偶爾因 session / cookie 行為變動而告警
+4. `yourator_jobs` 的新增量是否長期偏低
 
 ## Google Sheet 去重規則
 
