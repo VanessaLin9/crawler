@@ -1,6 +1,8 @@
 # Search Crawler
 
-用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成兩個 provider：`Cake` 與 `104`。
+English version: [README.en.md](README.en.md)
+
+用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成三個 provider：`Cake`、`104` 與 `Yourator`。
 
 這個專案目前已經打通：
 
@@ -54,7 +56,7 @@ cp .env.sample .env
 - `GOOGLE_SHEET_ID`: Google Sheet 的 spreadsheet ID
   可以從 Google Sheet URL 中間那段拿到
 - `GOOGLE_SHEET_NAME`: 可選，自訂要寫入的工作表名稱
-  如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`
+  如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`、`yourator_jobs`
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: Google service account JSON 檔案路徑
   例如 `secrets/google-service-account.json`
 - `SMTP_HOST`: SMTP 伺服器位址
@@ -91,13 +93,14 @@ GOOGLE_SERVICE_ACCOUNT_JSON=secrets/google-service-account.json
 
 - `cake` -> `cake_jobs`
 - `104` -> `104_jobs`
+- `yourator` -> `yourator_jobs`
 
 ## 最常用指令
 
 下面指令都假設你已經先：
 
 ```bash
-cd /Users/vanessa/develop/search
+cd /path/to/search
 source .venv/bin/activate
 ```
 
@@ -119,6 +122,12 @@ crawl-site cake "後端"
 crawl-site 104 "後端"
 ```
 
+也可以直接跑 Yourator：
+
+```bash
+crawl-site yourator "後端"
+```
+
 ### 爬完後同步到 Google Sheet
 
 ```bash
@@ -129,6 +138,12 @@ crawl-site cake "後端" --sync-google-sheet
 
 ```bash
 crawl-site 104 "後端" --sync-google-sheet
+```
+
+對 `yourator` 也是同樣用法，預設會寫到 `yourator_jobs`：
+
+```bash
+crawl-site yourator "後端" --sync-google-sheet
 ```
 
 ### 爬完後同步到 Google Sheet，並寄通知信
@@ -143,6 +158,12 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 crawl-site 104 "後端" --sync-google-sheet --send-email-notification
 ```
 
+`yourator` 也可以直接同步後寄通知信：
+
+```bash
+crawl-site yourator "後端" --sync-google-sheet --send-email-notification
+```
+
 ### 一次跑多個 provider
 
 如果你想一次跑完目前支援的主要 provider，可以用：
@@ -155,7 +176,8 @@ crawl-site all "後端" --sync-google-sheet --send-email-notification --send-mac
 
 - 先跑 `cake`
 - 再跑 `104`
-- 分別寫入 `cake_jobs` 與 `104_jobs`
+- 再跑 `yourator`
+- 分別寫入 `cake_jobs`、`104_jobs` 與 `yourator_jobs`
 - 各自寄出人類摘要信與 JSON 通知信
 - 最後在 terminal 印出 total summary
 
@@ -213,7 +235,7 @@ crawl-site 104 "後端" --sync-google-sheet --google-sheet-name my_custom_jobs
 
 ## 預設設定
 
-目前集中在 [crawler/settings.py](/Users/vanessa/develop/search/crawler/settings.py)：
+目前集中在 [crawler/settings.py](crawler/settings.py)：
 
 - `max_pages = 9`
 - `per_page = 20`
@@ -258,7 +280,7 @@ MACHINE_EMAIL_TO=machine-consumer@example.com
 
 目前已提供 workflow：
 
-- [.github/workflows/crawl-jobs.yml](/Users/vanessa/develop/search/.github/workflows/crawl-jobs.yml)
+- [.github/workflows/crawl-jobs.yml](.github/workflows/crawl-jobs.yml)
 
 這個 workflow 目前同時支援：
 
@@ -316,12 +338,13 @@ python -m crawler.cli all "<keyword>" \
 
 ### 觀察重點
 
-雖然輸出都在雲端，理論上很適合搬到 GitHub Actions，但 `104` 和 `Cake` 對 GitHub runner IP 的接受度還是值得持續觀察。  
+雖然輸出都在雲端，理論上很適合搬到 GitHub Actions，但 `104`、`Cake` 與 `Yourator` 對 GitHub runner IP 的接受度還是值得持續觀察。  
 建議先看幾天：
 
 1. Google Sheet 是否都有正常新增資料
 2. email 是否穩定寄出
 3. `104` 是否偶爾因 session / cookie 行為變動而告警
+4. `yourator_jobs` 的新增量是否長期偏低
 
 ## Google Sheet 去重規則
 
@@ -344,6 +367,7 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 
 - `104`
 - `cake`
+- `yourator`
 - `generic`
 
 ### 104
@@ -379,6 +403,28 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 - `前端`
 - `python`
 - `react`
+
+### Yourator
+
+`yourator` 目前以公開職缺列表 API 搭配公開職缺 detail page 補欄位：
+
+- list source: `https://www.yourator.co/api/v4/jobs?page={page}`
+- detail source: `https://www.yourator.co/companies/{company}/jobs/{job_id}`
+
+目前預設會把結果寫到 `yourator_jobs` worksheet。
+
+例如：
+
+- `後端`
+- `前端`
+- `python`
+- `react`
+
+備註：
+
+- 目前 V1 主要是從 jobs list 做本地 keyword match，屬於較保守的 matching 策略
+- `content_updated_at` 目前統一收斂成 `YYYY-MM-DD`
+- `面議（經常性薪資達X萬元）` 會保留 `negotiable`，同時把 `salary_min` 正規化成對應下限數字
 
 ### Generic
 
@@ -438,11 +484,11 @@ crawl-site generic "openai" \
 
 ## 自己擴充新網站
 
-1. 以 [template.py](/Users/vanessa/develop/search/crawler/sites/template.py) 為基礎建立新的 adapter
+1. 以 [template.py](crawler/sites/template.py) 為基礎建立新的 adapter
 2. 實作 `build_start_urls()`
 3. 實作 `parse_page()`
 4. 視需要調整 `should_visit()`
-5. 在 [registry.py](/Users/vanessa/develop/search/crawler/sites/registry.py) 註冊站點名稱
+5. 在 [registry.py](crawler/sites/registry.py) 註冊站點名稱
 
 ## 注意事項
 

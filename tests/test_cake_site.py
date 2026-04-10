@@ -202,6 +202,7 @@ class CakeSiteAdapterTests(unittest.TestCase):
         self.assertEqual(match["salary_display"], "50000 - 100000 TWD per_month")
         self.assertEqual(match["employment_type"], "full_time")
         self.assertEqual(match["seniority_level"], "entry_level")
+        self.assertEqual(match["content_updated_at"], "2026-03-17")
         self.assertEqual(
             match["job_url"],
             "https://www.cake.me/companies/cloudlatitudesoftware/jobs/sports-game-system-backend",

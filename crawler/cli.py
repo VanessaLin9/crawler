@@ -32,7 +32,7 @@ from crawler.settings import (
 from crawler.sites.registry import list_sites
 
 ALL_SITES_TOKEN = "all"
-MULTI_SITE_ORDER = ["cake", "104"]
+MULTI_SITE_ORDER = ["cake", "104", "yourator"]
 
 
 @dataclass(slots=True)
