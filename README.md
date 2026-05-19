@@ -57,6 +57,9 @@ cp .env.sample .env
   可以從 Google Sheet URL 中間那段拿到
 - `GOOGLE_SHEET_NAME`: 可選，自訂要寫入的工作表名稱
   如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`、`yourator_jobs`
+- `ENABLED_SITES`: 可選，用逗號分隔指定 `all` 模式要跑哪些 provider
+  例如 `cake,104,yourator`
+  只影響 `crawl-site all ...`，單獨跑 `crawl-site <provider> ...` 不受影響
 - `GOOGLE_SERVICE_ACCOUNT_JSON`: Google service account JSON 檔案路徑
   例如 `secrets/google-service-account.json`
 - `SMTP_HOST`: SMTP 伺服器位址
@@ -186,6 +189,23 @@ crawl-site all "後端" --sync-google-sheet --send-email-notification --send-mac
 - `all` 模式不支援共用 `--google-sheet-name`
 - 如果其中一個 provider 失敗，另一個 provider 仍會繼續跑
 - 只要任一 provider 失敗，整體 CLI exit code 會是 `1`
+
+如果你想限制 `all` 只跑部分 provider，可以在 `.env` 裡設定：
+
+```env
+ENABLED_SITES=cake,yourator
+```
+
+這樣：
+
+- `crawl-site all "後端"` 只會跑 `cake` 和 `yourator`
+- `crawl-site 104 "後端"` 仍然可以單獨跑，不受 `ENABLED_SITES` 影響
+
+補充規則：
+
+- `ENABLED_SITES` 沒設定時，`all` 會跑目前所有支援的 provider
+- `ENABLED_SITES` 如果包含未知 provider，CLI 會直接報錯
+- `ENABLED_SITES` 如果解析後是空的，`all` 也會直接報錯
 
 ### 強制重建 Google Sheet 後重跑
 
