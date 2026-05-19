@@ -32,7 +32,9 @@ from crawler.settings import (
 from crawler.sites.registry import list_sites
 
 ALL_SITES_TOKEN = "all"
-MULTI_SITE_ORDER = ["cake", "104", "yourator"]
+ENABLED_SITES_ENV_VAR = "ENABLED_SITES"
+MULTI_SITE_EXCLUDED_SITES = {"generic"}
+LEGACY_MULTI_SITE_ORDER = ["cake", "104", "yourator"]
 
 
 @dataclass(slots=True)
@@ -185,11 +187,70 @@ def _list_cli_sites() -> list[str]:
     return [ALL_SITES_TOKEN, *list_sites()]
 
 
-def _resolve_requested_sites(site: str) -> list[str]:
+def _resolve_requested_sites(
+    site: str,
+    enabled_sites_env: str | None = None,
+) -> list[str]:
     normalized_site = site.strip().casefold()
     if normalized_site == ALL_SITES_TOKEN:
-        return list(MULTI_SITE_ORDER)
+        return _resolve_all_mode_sites(enabled_sites_env)
     return [site]
+
+
+def _resolve_all_mode_sites(enabled_sites_env: str | None = None) -> list[str]:
+    available_sites = _default_all_mode_sites()
+    raw_enabled_sites = (
+        os.getenv(ENABLED_SITES_ENV_VAR)
+        if enabled_sites_env is None
+        else enabled_sites_env
+    )
+    if raw_enabled_sites is None:
+        return available_sites
+
+    enabled_sites = _parse_enabled_sites(raw_enabled_sites, available_sites)
+    if not enabled_sites:
+        raise SystemExit(
+            f"{ENABLED_SITES_ENV_VAR} did not enable any supported providers for "
+            f"{ALL_SITES_TOKEN} mode."
+        )
+
+    return [site for site in available_sites if site in enabled_sites]
+
+
+def _default_all_mode_sites() -> list[str]:
+    registered_sites = [
+        site for site in list_sites() if site not in MULTI_SITE_EXCLUDED_SITES
+    ]
+    ordered_sites = [
+        site for site in LEGACY_MULTI_SITE_ORDER if site in registered_sites
+    ]
+    remaining_sites = [
+        site for site in registered_sites if site not in ordered_sites
+    ]
+    return [*ordered_sites, *remaining_sites]
+
+
+def _parse_enabled_sites(
+    raw_enabled_sites: str,
+    available_sites: list[str],
+) -> list[str]:
+    enabled_sites = [
+        site.strip().casefold()
+        for site in raw_enabled_sites.split(",")
+        if site.strip()
+    ]
+    normalized_available = {site.casefold(): site for site in available_sites}
+    unknown_sites = sorted(set(enabled_sites) - set(normalized_available))
+    if unknown_sites:
+        unknown_display = ", ".join(unknown_sites)
+        available_display = ", ".join(available_sites)
+        raise SystemExit(
+            f"{ENABLED_SITES_ENV_VAR} contains unsupported providers: "
+            f"{unknown_display}. Supported providers for {ALL_SITES_TOKEN} mode: "
+            f"{available_display}"
+        )
+
+    return list(dict.fromkeys(enabled_sites))
 
 
 def _validate_runtime_args(args: argparse.Namespace, multi_site: bool) -> None:

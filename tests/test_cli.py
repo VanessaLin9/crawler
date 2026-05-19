@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from crawler.cli import (
     ALL_SITES_TOKEN,
+    ENABLED_SITES_ENV_VAR,
     SiteRunFailed,
     SiteRunSummary,
     _default_google_sheet_name,
@@ -75,6 +76,32 @@ class CliTests(unittest.TestCase):
     def test_resolve_requested_sites_expands_all_mode(self) -> None:
         self.assertEqual(_resolve_requested_sites("all"), ["cake", "104", "yourator"])
 
+    def test_resolve_requested_sites_uses_enabled_sites_subset_for_all_mode(self) -> None:
+        self.assertEqual(
+            _resolve_requested_sites("all", enabled_sites_env="yourator, cake"),
+            ["cake", "yourator"],
+        )
+
+    def test_resolve_requested_sites_rejects_unknown_enabled_site(self) -> None:
+        with self.assertRaisesRegex(
+            SystemExit,
+            "contains unsupported providers",
+        ):
+            _resolve_requested_sites("all", enabled_sites_env="cake,linkedin")
+
+    def test_resolve_requested_sites_rejects_empty_enabled_sites_for_all_mode(self) -> None:
+        with self.assertRaisesRegex(
+            SystemExit,
+            "did not enable any supported providers",
+        ):
+            _resolve_requested_sites("all", enabled_sites_env="  ,  ")
+
+    def test_resolve_requested_sites_allows_single_site_when_not_enabled(self) -> None:
+        self.assertEqual(
+            _resolve_requested_sites("104", enabled_sites_env="cake,yourator"),
+            ["104"],
+        )
+
     def test_resolve_output_path_adds_site_suffix_for_multi_site(self) -> None:
         self.assertEqual(
             _resolve_output_path("data/results.jsonl", "cake", multi_site=True),
@@ -129,6 +156,10 @@ class CliTests(unittest.TestCase):
 
         with patch.dict(os.environ, {"GOOGLE_SHEET_NAME": "shared_jobs"}, clear=False):
             _validate_runtime_args(args, multi_site=True)
+
+    def test_resolve_requested_sites_reads_enabled_sites_from_env_by_default(self) -> None:
+        with patch.dict(os.environ, {ENABLED_SITES_ENV_VAR: "104"}, clear=False):
+            self.assertEqual(_resolve_requested_sites("all"), ["104"])
 
     def test_execute_requested_sites_continues_after_one_provider_failure(self) -> None:
         args = argparse.Namespace(output="data/results.jsonl")

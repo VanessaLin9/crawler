@@ -1,5 +1,8 @@
 name: Crawl Jobs
 
+env:
+  DEFAULT_ENABLED_SITES: cake,104,yourator
+
 on:
   schedule:
     - cron: "0 1 * * *"
@@ -9,6 +12,10 @@ on:
         description: Search keyword to crawl across all supported providers
         required: true
         default: 後端
+      enabled_sites:
+        description: Comma-separated providers to run in all mode
+        required: true
+        default: cake,104,yourator
       reset_google_sheet:
         description: Clear provider worksheets before syncing new results
         required: true
@@ -63,6 +70,7 @@ jobs:
       - name: Run multi-site crawler
         env:
           KEYWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.keyword || '後端' }}
+          ENABLED_SITES: ${{ github.event_name == 'workflow_dispatch' && inputs.enabled_sites || env.DEFAULT_ENABLED_SITES }}
           RESET_GOOGLE_SHEET: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_google_sheet || 'false' }}
         run: |
           command=(

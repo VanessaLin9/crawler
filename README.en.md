@@ -67,6 +67,12 @@ GOOGLE_SHEET_ID=your_google_sheet_id
 GOOGLE_SERVICE_ACCOUNT_JSON=secrets/google-service-account.json
 ```
 
+Optional `.env` value:
+
+- `ENABLED_SITES`: a comma-separated allowlist for which providers `crawl-site all ...` should run
+  for example `cake,104,yourator`
+  single-provider runs like `crawl-site 104 ...` are not affected
+
 If you do not specify a worksheet name, the crawler routes each provider to its own worksheet:
 
 - `cake` -> `cake_jobs`
@@ -129,6 +135,23 @@ And writes to:
 - `cake_jobs`
 - `104_jobs`
 - `yourator_jobs`
+
+If you want `all` to run only a subset of providers, set this in `.env`:
+
+```env
+ENABLED_SITES=cake,yourator
+```
+
+With that config:
+
+- `crawl-site all "後端"` runs only `cake` and `yourator`
+- `crawl-site 104 "後端"` still works as a direct single-provider run
+
+Rules:
+
+- if `ENABLED_SITES` is not set, `all` runs every supported provider
+- if `ENABLED_SITES` contains an unknown provider, the CLI exits with an error
+- if `ENABLED_SITES` resolves to an empty set, `all` also exits with an error
 
 ## Default Settings
 
