@@ -25,12 +25,14 @@ def sync_job_records(
     sheet_name: str,
     service_account_path: str,
     reset_sheet: bool = False,
+    sheet_columns: list[str] | None = None,
 ) -> SheetSyncResult:
+    columns = sheet_columns or SHEET_COLUMNS
     service = _build_sheets_service(service_account_path)
     _ensure_sheet_exists(service, spreadsheet_id, sheet_name)
     if reset_sheet:
         _clear_sheet(service, spreadsheet_id, sheet_name)
-    _ensure_header_row(service, spreadsheet_id, sheet_name)
+    _ensure_header_row(service, spreadsheet_id, sheet_name, columns)
     existing_urls = _fetch_existing_job_urls(service, spreadsheet_id, sheet_name)
 
     appended_records = [
@@ -38,9 +40,9 @@ def sync_job_records(
         for record in records
         if record.job_url not in existing_urls
     ]
-    rows_to_append = [record.to_sheet_row() for record in appended_records]
+    rows_to_append = [record.to_sheet_row(columns) for record in appended_records]
     if rows_to_append:
-        _append_rows(service, spreadsheet_id, sheet_name, rows_to_append)
+        _append_rows(service, spreadsheet_id, sheet_name, rows_to_append, columns)
 
     return SheetSyncResult(
         appended_count=len(rows_to_append),
@@ -107,7 +109,12 @@ def _ensure_sheet_exists(service, spreadsheet_id: str, sheet_name: str) -> None:
     )
 
 
-def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> None:
+def _ensure_header_row(
+    service,
+    spreadsheet_id: str,
+    sheet_name: str,
+    columns: list[str],
+) -> None:
     response = (
         service.spreadsheets()
         .values()
@@ -123,12 +130,12 @@ def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> None:
             service,
             spreadsheet_id,
             f"{sheet_name}!1:1",
-            [SHEET_COLUMNS],
+            [columns],
         )
         return
 
     header = values[0]
-    if header == SHEET_COLUMNS:
+    if header == columns:
         return
 
     if "job_url" not in header:
@@ -169,13 +176,14 @@ def _append_rows(
     spreadsheet_id: str,
     sheet_name: str,
     rows: list[list[str]],
+    columns: list[str],
 ) -> None:
     (
         service.spreadsheets()
         .values()
         .append(
             spreadsheetId=spreadsheet_id,
-            range=f"{sheet_name}!A:{_column_letter(len(SHEET_COLUMNS))}",
+            range=f"{sheet_name}!A:{_column_letter(len(columns))}",
             valueInputOption="RAW",
             insertDataOption="INSERT_ROWS",
             body={"values": rows},

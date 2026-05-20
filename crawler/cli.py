@@ -18,7 +18,7 @@ from crawler.google_sheets import (
     DEFAULT_GOOGLE_SERVICE_ACCOUNT,
     sync_job_records,
 )
-from crawler.records import flatten_job_records
+from crawler.records import SHEET_COLUMNS, WWR_SHEET_COLUMNS, flatten_job_records
 from crawler.settings import (
     DEFAULT_DELAY_SECONDS,
     DEFAULT_MAX_PAGES,
@@ -170,6 +170,13 @@ def _resolve_google_sheet_name(
 def _default_google_sheet_name(site: str) -> str:
     normalized_site = site.strip().casefold()
     return f"{normalized_site}_jobs"
+
+
+def _sheet_columns_for_site(site: str) -> list[str]:
+    normalized_site = site.strip().casefold()
+    if normalized_site == "wwr":
+        return WWR_SHEET_COLUMNS
+    return SHEET_COLUMNS
 
 
 def _extract_crawl_issues(results: list[dict]) -> list[str]:
@@ -363,6 +370,7 @@ def _run_site(args: argparse.Namespace, site: str, multi_site: bool) -> SiteRunS
             sheet_name=sheet_name,
             service_account_path=args.google_service_account,
             reset_sheet=args.reset_google_sheet,
+            sheet_columns=_sheet_columns_for_site(site),
         )
         summary.appended_count = sync_result.appended_count
         summary.skipped_count = sync_result.skipped_count

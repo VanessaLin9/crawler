@@ -16,14 +16,20 @@ from crawler.cli import (
     _resolve_google_sheet_name,
     _resolve_output_path,
     _resolve_requested_sites,
+    _sheet_columns_for_site,
     _validate_runtime_args,
 )
+from crawler.records import SHEET_COLUMNS, WWR_SHEET_COLUMNS
 
 
 class CliTests(unittest.TestCase):
     def test_default_google_sheet_name_uses_site(self) -> None:
         self.assertEqual(_default_google_sheet_name("cake"), "cake_jobs")
         self.assertEqual(_default_google_sheet_name("104"), "104_jobs")
+
+    def test_sheet_columns_for_site_uses_wwr_schema(self) -> None:
+        self.assertIs(_sheet_columns_for_site("cake"), SHEET_COLUMNS)
+        self.assertIs(_sheet_columns_for_site("wwr"), WWR_SHEET_COLUMNS)
 
     def test_resolve_google_sheet_name_prefers_explicit_flag(self) -> None:
         self.assertEqual(

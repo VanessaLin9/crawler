@@ -32,6 +32,32 @@ SHEET_COLUMNS = [
 ]
 
 
+WWR_SHEET_COLUMNS = [
+    "job_url",
+    "title",
+    "company_name",
+    "company_url",
+    "wwr_region",
+    "wwr_category",
+    "feed_url",
+    "published_at",
+    "headquarters",
+    "remote_scope",
+    "country_eligibility",
+    "timezone_fit",
+    "employment_type",
+    "salary_display",
+    "tags",
+    "matched_fields",
+    "matched_terms",
+    "summary",
+    "description_text",
+    "logo_url",
+    "source_site",
+    "discovered_at",
+]
+
+
 @dataclass(slots=True)
 class JobRecord:
     job_url: str
@@ -58,33 +84,21 @@ class JobRecord:
     search_page_url: str
     content_updated_at: str
     discovered_at: str
+    wwr_region: str = ""
+    wwr_category: str = ""
+    feed_url: str = ""
+    published_at: str = ""
+    headquarters: str = ""
+    remote_scope: str = ""
+    country_eligibility: str = ""
+    timezone_fit: str = ""
+    description_text: str = ""
+    logo_url: str = ""
 
-    def to_sheet_row(self) -> list[str]:
+    def to_sheet_row(self, columns: list[str] | None = None) -> list[str]:
         return [
-            self.job_url,
-            self.title,
-            self.company_name,
-            self.company_url,
-            self.keyword,
-            self.location,
-            self.salary_min,
-            self.salary_max,
-            self.salary_currency,
-            self.salary_type,
-            self.salary_display,
-            self.openings_count,
-            self.employment_type,
-            self.seniority_level,
-            self.experience_required_years,
-            self.management_responsibility,
-            self.tags,
-            ", ".join(self.matched_fields),
-            ", ".join(self.matched_terms),
-            self.summary,
-            self.source_site,
-            self.search_page_url,
-            self.content_updated_at,
-            self.discovered_at,
+            _format_sheet_value(getattr(self, column, ""))
+            for column in (columns or SHEET_COLUMNS)
         ]
 
 
@@ -143,6 +157,16 @@ def flatten_job_records(
                 search_page_url=search_page_url,
                 content_updated_at=match.get("content_updated_at", ""),
                 discovered_at=discovered_value,
+                wwr_region=match.get("wwr_region", ""),
+                wwr_category=match.get("wwr_category", ""),
+                feed_url=match.get("feed_url", ""),
+                published_at=match.get("published_at", ""),
+                headquarters=match.get("headquarters", ""),
+                remote_scope=match.get("remote_scope", ""),
+                country_eligibility=match.get("country_eligibility", ""),
+                timezone_fit=match.get("timezone_fit", ""),
+                description_text=match.get("description_text", ""),
+                logo_url=match.get("logo_url", ""),
             )
 
     return list(deduped.values())
@@ -150,6 +174,14 @@ def flatten_job_records(
 
 def _merge_unique(current: list[str], incoming: list[str]) -> list[str]:
     return list(dict.fromkeys([*current, *incoming]))
+
+
+def _format_sheet_value(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value)
+    return str(value)
 
 
 def _utc_now_iso() -> str:

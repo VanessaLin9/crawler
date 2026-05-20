@@ -1,6 +1,6 @@
 import unittest
 
-from crawler.records import SHEET_COLUMNS, flatten_job_records
+from crawler.records import SHEET_COLUMNS, WWR_SHEET_COLUMNS, flatten_job_records
 
 
 class RecordTests(unittest.TestCase):
@@ -111,6 +111,55 @@ class RecordTests(unittest.TestCase):
         )[0]
 
         self.assertEqual(len(record.to_sheet_row()), len(SHEET_COLUMNS))
+
+    def test_wwr_sheet_row_uses_remote_schema_fields(self) -> None:
+        record = flatten_job_records(
+            [
+                {
+                    "site": "wwr",
+                    "keyword": "backend",
+                    "url": "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+                    "matches": [
+                        {
+                            "job_url": "https://weworkremotely.com/remote-jobs/acme-backend-engineer",
+                            "title": "ACME: Backend Engineer",
+                            "company_name": "ACME",
+                            "company_url": "https://acme.example",
+                            "wwr_region": "Anywhere in the World",
+                            "wwr_category": "Back-End Programming",
+                            "feed_url": "https://weworkremotely.com/categories/remote-programming-jobs.rss",
+                            "published_at": "Wed, 22 Apr 2026 18:04:38 +0000",
+                            "headquarters": "Remote",
+                            "remote_scope": "worldwide",
+                            "country_eligibility": "unknown",
+                            "timezone_fit": "unknown",
+                            "employment_type": "full_time",
+                            "salary_display": "",
+                            "tags": "Back-End Programming",
+                            "matched_fields": ["title"],
+                            "matched_terms": ["backend"],
+                            "summary": "Build backend systems.",
+                            "description_text": "Full job description.",
+                            "logo_url": "https://example.com/logo.png",
+                        }
+                    ],
+                }
+            ],
+            discovered_at="2026-05-20T12:00:00+00:00",
+        )[0]
+
+        row = record.to_sheet_row(WWR_SHEET_COLUMNS)
+
+        self.assertEqual(len(row), len(WWR_SHEET_COLUMNS))
+        self.assertEqual(
+            row[WWR_SHEET_COLUMNS.index("wwr_region")],
+            "Anywhere in the World",
+        )
+        self.assertEqual(row[WWR_SHEET_COLUMNS.index("remote_scope")], "worldwide")
+        self.assertEqual(
+            row[WWR_SHEET_COLUMNS.index("description_text")],
+            "Full job description.",
+        )
 
 
 if __name__ == "__main__":
