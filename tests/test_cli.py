@@ -12,9 +12,11 @@ from crawler.cli import (
     _execute_requested_sites,
     _extract_crawl_issues,
     _list_cli_sites,
+    _parse_keywords_arg,
     _raise_for_failed_sites,
     _resolve_google_sheet_name,
     _resolve_output_path,
+    _resolve_requested_keywords,
     _resolve_requested_sites,
     _validate_runtime_args,
 )
@@ -237,6 +239,39 @@ class CliTests(unittest.TestCase):
                 ),
             ]
         )
+
+    def test_resolve_requested_keywords_uses_positional_keyword(self) -> None:
+        self.assertEqual(_resolve_requested_keywords("後端", None), ["後端"])
+
+    def test_resolve_requested_keywords_parses_comma_separated_keywords(self) -> None:
+        self.assertEqual(
+            _resolve_requested_keywords(None, "後端,全端,AI"),
+            ["後端", "全端", "AI"],
+        )
+
+    def test_resolve_requested_keywords_trims_whitespace(self) -> None:
+        self.assertEqual(
+            _resolve_requested_keywords(None, "後端, 全端, AI"),
+            ["後端", "全端", "AI"],
+        )
+
+    def test_resolve_requested_keywords_rejects_empty_keywords_arg(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "did not resolve to any keywords"):
+            _resolve_requested_keywords(None, ",, ")
+
+    def test_resolve_requested_keywords_rejects_positional_and_flag_together(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "not both"):
+            _resolve_requested_keywords("後端", "全端,AI")
+
+    def test_resolve_requested_keywords_requires_keyword_source(self) -> None:
+        with self.assertRaisesRegex(
+            SystemExit,
+            "site and keyword are required unless --list-sites is used",
+        ):
+            _resolve_requested_keywords(None, None)
+
+    def test_parse_keywords_arg_returns_empty_list_for_none(self) -> None:
+        self.assertEqual(_parse_keywords_arg(None), [])
 
 
 if __name__ == "__main__":

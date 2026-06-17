@@ -70,6 +70,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default=DEFAULT_OUTPUT_PATH)
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT)
     parser.add_argument("--search-url-template")
+    parser.add_argument(
+        "--keywords",
+        help="Comma-separated keywords to crawl (e.g. 後端,全端,AI)",
+    )
     parser.add_argument("--list-sites", action="store_true")
     parser.add_argument("--sync-google-sheet", action="store_true")
     parser.add_argument("--google-sheet-id", default=os.getenv("GOOGLE_SHEET_ID"))
@@ -121,8 +125,11 @@ def main() -> None:
             print(site)
         return
 
-    if not args.site or not args.keyword:
+    if not args.site:
         raise SystemExit("site and keyword are required unless --list-sites is used")
+
+    keywords = _resolve_requested_keywords(args.keyword, args.keywords)
+    args.keyword = keywords[0]
 
     sites = _resolve_requested_sites(args.site)
     _validate_runtime_args(args, multi_site=len(sites) > 1)
@@ -185,6 +192,35 @@ def _extract_crawl_issues(results: list[dict]) -> list[str]:
 
 def _list_cli_sites() -> list[str]:
     return [ALL_SITES_TOKEN, *list_sites()]
+
+
+def _parse_keywords_arg(keywords_arg: str | None) -> list[str]:
+    if keywords_arg is None:
+        return []
+    return [part.strip() for part in keywords_arg.split(",") if part.strip()]
+
+
+def _resolve_requested_keywords(
+    positional_keyword: str | None,
+    keywords_arg: str | None,
+) -> list[str]:
+    positional = (positional_keyword or "").strip()
+    parsed_keywords = _parse_keywords_arg(keywords_arg)
+
+    if positional and parsed_keywords:
+        raise SystemExit(
+            "Provide either a positional keyword or --keywords, not both."
+        )
+
+    if positional:
+        return [positional]
+
+    if keywords_arg is not None:
+        if not parsed_keywords:
+            raise SystemExit("--keywords did not resolve to any keywords.")
+        return parsed_keywords
+
+    raise SystemExit("site and keyword are required unless --list-sites is used")
 
 
 def _resolve_requested_sites(
