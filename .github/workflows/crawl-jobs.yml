@@ -8,8 +8,8 @@ on:
     - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
-      keyword:
-        description: Search keyword to crawl across all supported providers
+      keywords:
+        description: Comma-separated keywords to crawl across all supported providers
         required: true
         default: 後端
       enabled_sites:
@@ -17,7 +17,7 @@ on:
         required: true
         default: cake,104,yourator
       reset_google_sheet:
-        description: Clear provider worksheets before syncing new results
+        description: Clear provider worksheets before syncing new results (single-keyword runs only; not supported with comma-separated keywords)
         required: true
         default: false
         type: boolean
@@ -69,12 +69,12 @@ jobs:
 
       - name: Run multi-site crawler
         env:
-          KEYWORD: ${{ github.event_name == 'workflow_dispatch' && inputs.keyword || '後端' }}
+          KEYWORDS: ${{ github.event_name == 'workflow_dispatch' && inputs.keywords || '後端' }}
           ENABLED_SITES: ${{ github.event_name == 'workflow_dispatch' && inputs.enabled_sites || env.DEFAULT_ENABLED_SITES }}
           RESET_GOOGLE_SHEET: ${{ github.event_name == 'workflow_dispatch' && inputs.reset_google_sheet || 'false' }}
         run: |
           command=(
-            python -m crawler.cli all "$KEYWORD"
+            python -m crawler.cli all --keywords "$KEYWORDS"
             --sync-google-sheet
             --send-email-notification
             --send-machine-email-notification

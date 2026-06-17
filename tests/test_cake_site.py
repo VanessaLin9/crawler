@@ -78,6 +78,58 @@ class CakeSiteAdapterTests(unittest.TestCase):
         self.assertIn("backend", expanded)
         self.assertIn("後端工程師", expanded)
 
+    def test_expand_search_terms_for_fullstack_keyword(self) -> None:
+        expanded = _expand_search_terms("全端")
+        self.assertIn("full-stack", expanded)
+        self.assertIn("full stack engineer", expanded)
+        self.assertIn("全端工程師", expanded)
+
+    @patch("crawler.sites.cake._fetch_search_api_page")
+    def test_parse_page_matches_fullstack_titles_for_fullstack_keyword(
+        self,
+        mock_fetch_search_api_page,
+    ) -> None:
+        adapter = CakeItJobsAdapter("全端", use_search_api=True)
+        mock_fetch_search_api_page.return_value = {
+            "total_pages": 1,
+            "current_page": 1,
+            "data": [
+                {
+                    "path": "software-engineer-fullstack",
+                    "title": "Software Engineer (Full-stack)",
+                    "description": "Build web applications across the stack",
+                    "locations": ["台北市, 台灣"],
+                    "salary": {
+                        "min": "80000",
+                        "max": "120000",
+                        "currency": "TWD",
+                        "type": "per_month",
+                    },
+                    "seniority_level": "mid_senior_level",
+                    "job_type": "full_time",
+                    "number_of_management": "none",
+                    "number_of_openings": 1,
+                    "tags": ["JavaScript", "React"],
+                    "page": {
+                        "path": "acme",
+                        "name": "ACME",
+                    },
+                    "min_work_exp_year": 2,
+                    "content_updated_at": "2026-03-17T06:17:16.052728Z",
+                }
+            ],
+        }
+
+        parsed = adapter.parse_page(
+            "https://www.cake.me/jobs/%E5%85%A8%E7%AB%AF/for-it",
+            "<html><head><title>Cake Job Search</title></head><body></body></html>",
+            "全端",
+        )
+
+        self.assertEqual(len(parsed.matches), 1)
+        self.assertEqual(parsed.matches[0]["title"], "Software Engineer (Full-stack)")
+        self.assertIn("full-stack", parsed.matches[0]["matched_terms"])
+
     def test_parse_page_reads_structured_fields_from_next_data(self) -> None:
         adapter = CakeItJobsAdapter("後端")
         next_data = {

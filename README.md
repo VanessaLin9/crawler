@@ -190,6 +190,24 @@ crawl-site all "後端" --sync-google-sheet --send-email-notification --send-mac
 - 如果其中一個 provider 失敗，另一個 provider 仍會繼續跑
 - 只要任一 provider 失敗，整體 CLI exit code 會是 `1`
 
+### 一次跑多個 keyword
+
+除了單一 positional keyword，也可以一次搜尋多個 keyword：
+
+```bash
+crawl-site all --keywords "後端,全端,AI"
+crawl-site cake --keywords "後端,全端"
+crawl-site 104 --keywords "後端,AI"
+```
+
+注意：
+
+- 舊用法 `crawl-site all "後端"` 仍然可用
+- positional keyword 與 `--keywords` 不能同時使用
+- multi-keyword 會依序跑 `keyword × provider`，請求量與 email 數量都會增加
+- `--reset-google-sheet` 不支援 multi-keyword
+- Google Sheet 仍以 `job_url` 去重；同一職缺只保留第一個成功寫入的 `keyword`
+
 如果你想限制 `all` 只跑部分 provider，可以在 `.env` 裡設定：
 
 ```env
@@ -340,7 +358,7 @@ MACHINE_EMAIL_TO=machine-consumer@example.com
 - 執行：
 
 ```bash
-python -m crawler.cli all "<keyword>" \
+python -m crawler.cli all --keywords "<keywords>" \
   --sync-google-sheet \
   --send-email-notification \
   --send-machine-email-notification
@@ -349,11 +367,12 @@ python -m crawler.cli all "<keyword>" \
 ### 手動與排程的差異
 
 - 手動觸發時：
-  - 可以自訂 `keyword`
+  - 可以自訂 `keywords`，例如 `後端` 或 `後端,全端,AI`
   - 可以選擇是否加 `reset_google_sheet`
+  - multi-keyword 會增加請求量與 email 數量；建議先小範圍測試
 
 - 排程觸發時：
-  - 固定用關鍵字 `後端`
+  - 固定用單一 keyword `後端`
   - 不會自動加 `--reset-google-sheet`
 
 ### 觀察重點

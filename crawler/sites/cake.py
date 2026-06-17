@@ -48,6 +48,20 @@ KEYWORD_GROUPS = [
             "前端開發工程師",
         ],
     ),
+    (
+        "全端",
+        [
+            "全端",
+            "fullstack",
+            "full-stack",
+            "full stack",
+            "fullstack engineer",
+            "full stack engineer",
+            "full-stack engineer",
+            "全端工程師",
+            "全端開發",
+        ],
+    ),
 ]
 DATE_PREFIX_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}")
 

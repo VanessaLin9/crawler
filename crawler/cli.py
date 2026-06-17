@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -43,6 +44,7 @@ class SiteRunSummary:
     output_path: str
     crawled_pages: int
     records_found: int
+    keyword: str = ""
     crawl_issues: list[str] = field(default_factory=list)
     appended_count: int = 0
     skipped_count: int = 0
@@ -70,6 +72,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", default=DEFAULT_OUTPUT_PATH)
     parser.add_argument("--user-agent", default=DEFAULT_USER_AGENT)
     parser.add_argument("--search-url-template")
+    parser.add_argument(
+        "--keywords",
+        help="Comma-separated keywords to crawl (e.g. 後端,全端,AI)",
+    )
     parser.add_argument("--list-sites", action="store_true")
     parser.add_argument("--sync-google-sheet", action="store_true")
     parser.add_argument("--google-sheet-id", default=os.getenv("GOOGLE_SHEET_ID"))
@@ -121,25 +127,37 @@ def main() -> None:
             print(site)
         return
 
-    if not args.site or not args.keyword:
+    if not args.site:
         raise SystemExit("site and keyword are required unless --list-sites is used")
 
-    sites = _resolve_requested_sites(args.site)
-    _validate_runtime_args(args, multi_site=len(sites) > 1)
+    keywords = _resolve_requested_keywords(args.keyword, args.keywords)
+    multi_keyword = len(keywords) > 1
 
-    summaries = _execute_requested_sites(args, sites)
+    sites = _resolve_requested_sites(args.site)
     multi_site = len(sites) > 1
+    _validate_reset_google_sheet(args, multi_keyword=multi_keyword)
+    _validate_runtime_args(args, multi_site=multi_site)
+
+    summaries = _execute_requested_runs(args, sites, keywords)
+    show_run_prefix = multi_site or multi_keyword
     for summary in summaries:
         _print_site_run_summary(
             summary,
             sync_google_sheet=args.sync_google_sheet,
             send_email_notification=args.send_email_notification,
-            multi_site=multi_site,
+            show_run_prefix=show_run_prefix,
+            multi_keyword=multi_keyword,
         )
 
-    if multi_site:
-        _print_multi_site_summary(summaries, sync_google_sheet=args.sync_google_sheet)
-        _raise_for_failed_sites(summaries)
+    if show_run_prefix:
+        _print_multi_run_summary(
+            summaries,
+            keywords=keywords,
+            sync_google_sheet=args.sync_google_sheet,
+            multi_keyword=multi_keyword,
+            multi_site=multi_site,
+        )
+        _raise_for_failed_runs(summaries)
 
 
 def _env_flag(name: str, default: bool) -> bool:
@@ -185,6 +203,35 @@ def _extract_crawl_issues(results: list[dict]) -> list[str]:
 
 def _list_cli_sites() -> list[str]:
     return [ALL_SITES_TOKEN, *list_sites()]
+
+
+def _parse_keywords_arg(keywords_arg: str | None) -> list[str]:
+    if keywords_arg is None:
+        return []
+    return [part.strip() for part in keywords_arg.split(",") if part.strip()]
+
+
+def _resolve_requested_keywords(
+    positional_keyword: str | None,
+    keywords_arg: str | None,
+) -> list[str]:
+    positional = (positional_keyword or "").strip()
+    parsed_keywords = _parse_keywords_arg(keywords_arg)
+
+    if positional and keywords_arg is not None:
+        raise SystemExit(
+            "Provide either a positional keyword or --keywords, not both."
+        )
+
+    if positional:
+        return [positional]
+
+    if keywords_arg is not None:
+        if not parsed_keywords:
+            raise SystemExit("--keywords did not resolve to any keywords.")
+        return parsed_keywords
+
+    raise SystemExit("site and keyword are required unless --list-sites is used")
 
 
 def _resolve_requested_sites(
@@ -253,6 +300,19 @@ def _parse_enabled_sites(
     return list(dict.fromkeys(enabled_sites))
 
 
+def _validate_reset_google_sheet(
+    args: argparse.Namespace,
+    *,
+    multi_keyword: bool,
+) -> None:
+    if args.reset_google_sheet and multi_keyword:
+        raise SystemExit(
+            "--reset-google-sheet is not supported with multi-keyword crawls; "
+            "it would clear worksheet data written by earlier keywords in the "
+            "same run."
+        )
+
+
 def _validate_runtime_args(args: argparse.Namespace, multi_site: bool) -> None:
     if args.send_email_notification and not args.sync_google_sheet:
         raise SystemExit("--send-email-notification requires --sync-google-sheet")
@@ -290,15 +350,43 @@ def _has_custom_google_sheet_target(
     return bool(env_value and env_value != "cake_jobs")
 
 
-def _resolve_output_path(base_output: str, site: str, multi_site: bool) -> str:
-    if not multi_site:
+def _resolve_output_path(
+    base_output: str,
+    site: str,
+    multi_site: bool,
+    *,
+    keyword: str | None = None,
+    multi_keyword: bool = False,
+) -> str:
+    if not multi_site and not multi_keyword:
         return base_output
 
     path = Path(base_output)
-    suffix = "".join(path.suffixes)
-    stem = path.name[: -len(suffix)] if suffix else path.name
-    file_name = f"{stem}-{site}{suffix}"
+    file_suffix = "".join(path.suffixes)
+    stem = path.name[: -len(file_suffix)] if file_suffix else path.name
+
+    name_parts = [stem]
+    if multi_site or multi_keyword:
+        name_parts.append(site)
+    if multi_keyword:
+        if not keyword:
+            raise SystemExit(
+                "keyword is required when resolving multi-keyword output paths."
+            )
+        name_parts.append(_keyword_output_slug(keyword))
+
+    file_name = f"{'-'.join(name_parts)}{file_suffix}"
     return str(path.with_name(file_name))
+
+
+def _keyword_output_slug(keyword: str) -> str:
+    slug = _UNSAFE_OUTPUT_SUFFIX_CHARS.sub("-", keyword.strip()).strip("-")
+    if not slug:
+        raise SystemExit("keyword resolved to an empty output path suffix.")
+    return slug
+
+
+_UNSAFE_OUTPUT_SUFFIX_CHARS = re.compile(r"[/\\\s]+")
 
 
 def _build_crawl_config(
@@ -331,10 +419,23 @@ def _build_smtp_config(args: argparse.Namespace) -> SmtpConfig:
     )
 
 
-def _run_site(args: argparse.Namespace, site: str, multi_site: bool) -> SiteRunSummary:
-    output_path = _resolve_output_path(args.output, site, multi_site)
+def _run_site(
+    args: argparse.Namespace,
+    site: str,
+    *,
+    multi_site: bool,
+    multi_keyword: bool,
+) -> SiteRunSummary:
+    output_path = _resolve_output_path(
+        args.output,
+        site,
+        multi_site,
+        keyword=args.keyword,
+        multi_keyword=multi_keyword,
+    )
     summary = SiteRunSummary(
         site=site,
+        keyword=args.keyword,
         output_path=output_path,
         crawled_pages=0,
         records_found=0,
@@ -408,32 +509,51 @@ def _run_site(args: argparse.Namespace, site: str, multi_site: bool) -> SiteRunS
         raise SiteRunFailed(summary, str(exc)) from exc
 
 
-def _execute_requested_sites(
+def _execute_requested_runs(
     args: argparse.Namespace,
     sites: list[str],
+    keywords: list[str],
 ) -> list[SiteRunSummary]:
     multi_site = len(sites) > 1
+    multi_keyword = len(keywords) > 1
+    continue_on_failure = multi_site or multi_keyword
     summaries: list[SiteRunSummary] = []
 
-    for site in sites:
-        try:
-            summaries.append(_run_site(args, site, multi_site=multi_site))
-        except SiteRunFailed as exc:
-            if not multi_site:
-                raise
-            summaries.append(exc.summary)
-        except Exception as exc:
-            if not multi_site:
-                raise
-            summaries.append(
-                SiteRunSummary(
-                    site=site,
-                    output_path=_resolve_output_path(args.output, site, multi_site=True),
-                    crawled_pages=0,
-                    records_found=0,
-                    error=str(exc),
+    for keyword in keywords:
+        args.keyword = keyword
+        for site in sites:
+            try:
+                summaries.append(
+                    _run_site(
+                        args,
+                        site,
+                        multi_site=multi_site,
+                        multi_keyword=multi_keyword,
+                    )
                 )
-            )
+            except SiteRunFailed as exc:
+                if not continue_on_failure:
+                    raise
+                summaries.append(exc.summary)
+            except Exception as exc:
+                if not continue_on_failure:
+                    raise
+                summaries.append(
+                    SiteRunSummary(
+                        site=site,
+                        keyword=keyword,
+                        output_path=_resolve_output_path(
+                            args.output,
+                            site,
+                            multi_site,
+                            keyword=keyword,
+                            multi_keyword=multi_keyword,
+                        ),
+                        crawled_pages=0,
+                        records_found=0,
+                        error=str(exc),
+                    )
+                )
 
     return summaries
 
@@ -443,9 +563,10 @@ def _print_site_run_summary(
     *,
     sync_google_sheet: bool,
     send_email_notification: bool,
-    multi_site: bool,
+    show_run_prefix: bool,
+    multi_keyword: bool,
 ) -> None:
-    prefix = f"{summary.site}: " if multi_site else ""
+    prefix = _format_run_summary_prefix(summary, show_run_prefix, multi_keyword)
 
     if summary.error:
         print(f"{prefix}failed: {summary.error}")
@@ -483,26 +604,55 @@ def _print_site_run_summary(
     )
 
 
-def _print_multi_site_summary(
+def _format_run_summary_prefix(
+    summary: SiteRunSummary,
+    show_run_prefix: bool,
+    multi_keyword: bool,
+) -> str:
+    if not show_run_prefix:
+        return ""
+    if multi_keyword:
+        return f"{summary.keyword} / {summary.site}: "
+    return f"{summary.site}: "
+
+
+def _print_multi_run_summary(
     summaries: list[SiteRunSummary],
     *,
+    keywords: list[str],
     sync_google_sheet: bool,
+    multi_keyword: bool,
+    multi_site: bool,
 ) -> None:
     if sync_google_sheet:
         print(f"Total new jobs: {sum(summary.appended_count for summary in summaries)}")
     else:
         print(f"Total jobs found: {sum(summary.records_found for summary in summaries)}")
 
-    print(f"Providers run: {', '.join(summary.site for summary in summaries)}")
+    if multi_keyword:
+        print(f"Keywords run: {', '.join(keywords)}")
 
-    failed_sites = [summary.site for summary in summaries if summary.error]
-    if failed_sites:
-        print(f"Providers failed: {', '.join(failed_sites)}")
+    if multi_site or multi_keyword:
+        providers = list(dict.fromkeys(summary.site for summary in summaries))
+        print(f"Providers run: {', '.join(providers)}")
+
+    failed_runs = [summary for summary in summaries if summary.error]
+    if not failed_runs:
+        return
+
+    if multi_keyword:
+        failed_labels = [
+            f"{summary.site}/{summary.keyword}" for summary in failed_runs
+        ]
+        print(f"Runs failed: {', '.join(failed_labels)}")
+        return
+
+    failed_sites = [summary.site for summary in failed_runs]
+    print(f"Providers failed: {', '.join(failed_sites)}")
 
 
-def _raise_for_failed_sites(summaries: list[SiteRunSummary]) -> None:
-    failed_sites = [summary.site for summary in summaries if summary.error]
-    if failed_sites:
+def _raise_for_failed_runs(summaries: list[SiteRunSummary]) -> None:
+    if any(summary.error for summary in summaries):
         raise SystemExit(1)
 
 
