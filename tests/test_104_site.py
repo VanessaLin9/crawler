@@ -1,7 +1,11 @@
 import unittest
 from unittest.mock import patch
 
-from crawler.sites.site104 import JOB104_SEARCH_URL, OneOhFourJobsAdapter
+from crawler.sites.site104 import (
+    JOB104_SEARCH_URL,
+    OneOhFourJobsAdapter,
+    _expand_search_terms,
+)
 
 
 class OneOhFourSiteAdapterTests(unittest.TestCase):
@@ -11,6 +15,48 @@ class OneOhFourSiteAdapterTests(unittest.TestCase):
             adapter.build_start_urls("後端"),
             ["https://www.104.com.tw/jobs/search/?keyword=%E5%BE%8C%E7%AB%AF"],
         )
+
+    def test_expand_search_terms_for_fullstack_keyword(self) -> None:
+        expanded = _expand_search_terms("全端")
+        self.assertIn("full stack", expanded)
+        self.assertIn("full-stack engineer", expanded)
+        self.assertIn("全端開發", expanded)
+
+    def test_parse_page_matches_fullstack_titles_for_fullstack_keyword(self) -> None:
+        adapter = OneOhFourJobsAdapter("全端", per_page=30)
+        api_response = {
+            "data": [
+                {
+                    "appearDate": "20260327",
+                    "custName": "全端測試公司",
+                    "description": "負責前後端整合與系統開發。",
+                    "descSnippet": "負責前後端整合與系統開發。",
+                    "jobAddrNoDesc": "台北市大安區",
+                    "jobAddress": "復興南路",
+                    "jobName": "Full Stack Engineer",
+                    "link": {
+                        "job": "https://www.104.com.tw/job/fullstack1",
+                        "cust": "https://www.104.com.tw/company/fullstack-company",
+                    },
+                    "pcSkills": [],
+                    "tags": {},
+                }
+            ],
+            "metadata": {
+                "pagination": {"count": 30, "currentPage": 1, "lastPage": 1, "total": 1}
+            },
+        }
+
+        with patch("crawler.sites.site104._fetch_search_api_page", return_value=api_response):
+            parsed = adapter.parse_page(
+                JOB104_SEARCH_URL,
+                "<html><head><title>104 工作搜尋</title></head><body></body></html>",
+                "全端",
+            )
+
+        self.assertEqual(len(parsed.matches), 1)
+        self.assertEqual(parsed.matches[0]["title"], "Full Stack Engineer")
+        self.assertIn("full stack", parsed.matches[0]["matched_terms"])
 
     def test_parse_page_uses_api_results(self) -> None:
         adapter = OneOhFourJobsAdapter("後端", per_page=30)
