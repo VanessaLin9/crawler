@@ -20,6 +20,7 @@ from crawler.cli import (
     _keyword_output_slug,
     _resolve_requested_keywords,
     _resolve_requested_sites,
+    _validate_reset_google_sheet,
     _validate_runtime_args,
 )
 
@@ -163,6 +164,22 @@ class CliTests(unittest.TestCase):
     def test_keyword_output_slug_rejects_empty_slug(self) -> None:
         with self.assertRaisesRegex(SystemExit, "empty output path suffix"):
             _keyword_output_slug("   ")
+
+    def test_validate_reset_google_sheet_allows_single_keyword(self) -> None:
+        args = argparse.Namespace(reset_google_sheet=True)
+        _validate_reset_google_sheet(args, multi_keyword=False)
+
+    def test_validate_reset_google_sheet_rejects_multi_keyword(self) -> None:
+        args = argparse.Namespace(reset_google_sheet=True)
+        with self.assertRaisesRegex(
+            SystemExit,
+            "not supported with multi-keyword crawls",
+        ):
+            _validate_reset_google_sheet(args, multi_keyword=True)
+
+    def test_validate_reset_google_sheet_allows_multi_keyword_without_reset(self) -> None:
+        args = argparse.Namespace(reset_google_sheet=False)
+        _validate_reset_google_sheet(args, multi_keyword=True)
 
     def test_validate_runtime_args_rejects_shared_sheet_in_all_mode(self) -> None:
         args = argparse.Namespace(

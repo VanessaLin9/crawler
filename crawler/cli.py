@@ -135,6 +135,7 @@ def main() -> None:
 
     sites = _resolve_requested_sites(args.site)
     multi_site = len(sites) > 1
+    _validate_reset_google_sheet(args, multi_keyword=multi_keyword)
     _validate_runtime_args(args, multi_site=multi_site)
 
     summaries = _execute_requested_runs(args, sites, keywords)
@@ -297,6 +298,19 @@ def _parse_enabled_sites(
         )
 
     return list(dict.fromkeys(enabled_sites))
+
+
+def _validate_reset_google_sheet(
+    args: argparse.Namespace,
+    *,
+    multi_keyword: bool,
+) -> None:
+    if args.reset_google_sheet and multi_keyword:
+        raise SystemExit(
+            "--reset-google-sheet is not supported with multi-keyword crawls; "
+            "it would clear worksheet data written by earlier keywords in the "
+            "same run."
+        )
 
 
 def _validate_runtime_args(args: argparse.Namespace, multi_site: bool) -> None:
