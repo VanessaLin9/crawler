@@ -209,7 +209,7 @@ def _resolve_requested_keywords(
     positional = (positional_keyword or "").strip()
     parsed_keywords = _parse_keywords_arg(keywords_arg)
 
-    if positional and parsed_keywords:
+    if positional and keywords_arg is not None:
         raise SystemExit(
             "Provide either a positional keyword or --keywords, not both."
         )

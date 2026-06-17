@@ -265,6 +265,12 @@ class CliTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "not both"):
             _resolve_requested_keywords("後端", "全端,AI")
 
+    def test_resolve_requested_keywords_rejects_positional_and_empty_keywords_flag(
+        self,
+    ) -> None:
+        with self.assertRaisesRegex(SystemExit, "not both"):
+            _resolve_requested_keywords("後端", ",,")
+
     def test_resolve_requested_keywords_requires_keyword_source(self) -> None:
         with self.assertRaisesRegex(
             SystemExit,
