@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -19,6 +20,7 @@ from crawler.cli import (
     _resolve_requested_keywords,
     _resolve_requested_sites,
     _validate_runtime_args,
+    main,
 )
 
 
@@ -272,6 +274,19 @@ class CliTests(unittest.TestCase):
 
     def test_parse_keywords_arg_returns_empty_list_for_none(self) -> None:
         self.assertEqual(_parse_keywords_arg(None), [])
+
+    def test_main_rejects_multi_keyword_execution(self) -> None:
+        with patch.object(
+            sys,
+            "argv",
+            ["crawler.cli", "all", "--keywords", "後端,全端"],
+        ):
+            with patch("crawler.cli.load_dotenv"):
+                with self.assertRaisesRegex(
+                    SystemExit,
+                    "multi-keyword execution is not implemented yet",
+                ):
+                    main()
 
 
 if __name__ == "__main__":

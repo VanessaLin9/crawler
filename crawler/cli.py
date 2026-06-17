@@ -129,6 +129,8 @@ def main() -> None:
         raise SystemExit("site and keyword are required unless --list-sites is used")
 
     keywords = _resolve_requested_keywords(args.keyword, args.keywords)
+    if len(keywords) > 1:
+        raise SystemExit("multi-keyword execution is not implemented yet")
     args.keyword = keywords[0]
 
     sites = _resolve_requested_sites(args.site)
