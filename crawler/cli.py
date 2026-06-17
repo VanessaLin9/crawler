@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -328,15 +329,43 @@ def _has_custom_google_sheet_target(
     return bool(env_value and env_value != "cake_jobs")
 
 
-def _resolve_output_path(base_output: str, site: str, multi_site: bool) -> str:
-    if not multi_site:
+def _resolve_output_path(
+    base_output: str,
+    site: str,
+    multi_site: bool,
+    *,
+    keyword: str | None = None,
+    multi_keyword: bool = False,
+) -> str:
+    if not multi_site and not multi_keyword:
         return base_output
 
     path = Path(base_output)
-    suffix = "".join(path.suffixes)
-    stem = path.name[: -len(suffix)] if suffix else path.name
-    file_name = f"{stem}-{site}{suffix}"
+    file_suffix = "".join(path.suffixes)
+    stem = path.name[: -len(file_suffix)] if file_suffix else path.name
+
+    name_parts = [stem]
+    if multi_site or multi_keyword:
+        name_parts.append(site)
+    if multi_keyword:
+        if not keyword:
+            raise SystemExit(
+                "keyword is required when resolving multi-keyword output paths."
+            )
+        name_parts.append(_keyword_output_slug(keyword))
+
+    file_name = f"{'-'.join(name_parts)}{file_suffix}"
     return str(path.with_name(file_name))
+
+
+def _keyword_output_slug(keyword: str) -> str:
+    slug = _UNSAFE_OUTPUT_SUFFIX_CHARS.sub("-", keyword.strip()).strip("-")
+    if not slug:
+        raise SystemExit("keyword resolved to an empty output path suffix.")
+    return slug
+
+
+_UNSAFE_OUTPUT_SUFFIX_CHARS = re.compile(r"[/\\\s]+")
 
 
 def _build_crawl_config(

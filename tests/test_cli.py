@@ -17,6 +17,7 @@ from crawler.cli import (
     _raise_for_failed_sites,
     _resolve_google_sheet_name,
     _resolve_output_path,
+    _keyword_output_slug,
     _resolve_requested_keywords,
     _resolve_requested_sites,
     _validate_runtime_args,
@@ -117,6 +118,52 @@ class CliTests(unittest.TestCase):
             _resolve_output_path("data/results.jsonl", "cake", multi_site=False),
             "data/results.jsonl",
         )
+
+    def test_resolve_output_path_adds_keyword_suffix_for_multi_keyword_all_mode(
+        self,
+    ) -> None:
+        self.assertEqual(
+            _resolve_output_path(
+                "data/results.jsonl",
+                "cake",
+                multi_site=True,
+                keyword="後端",
+                multi_keyword=True,
+            ),
+            "data/results-cake-後端.jsonl",
+        )
+
+    def test_resolve_output_path_slugifies_unsafe_keyword_characters(self) -> None:
+        self.assertEqual(_keyword_output_slug("AI Agent"), "AI-Agent")
+        self.assertEqual(_keyword_output_slug("foo/bar"), "foo-bar")
+        self.assertEqual(
+            _resolve_output_path(
+                "data/results.jsonl",
+                "cake",
+                multi_site=True,
+                keyword="AI Agent",
+                multi_keyword=True,
+            ),
+            "data/results-cake-AI-Agent.jsonl",
+        )
+
+    def test_resolve_output_path_adds_site_and_keyword_for_single_site_multi_keyword(
+        self,
+    ) -> None:
+        self.assertEqual(
+            _resolve_output_path(
+                "data/results.jsonl",
+                "cake",
+                multi_site=False,
+                keyword="後端",
+                multi_keyword=True,
+            ),
+            "data/results-cake-後端.jsonl",
+        )
+
+    def test_keyword_output_slug_rejects_empty_slug(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "empty output path suffix"):
+            _keyword_output_slug("   ")
 
     def test_validate_runtime_args_rejects_shared_sheet_in_all_mode(self) -> None:
         args = argparse.Namespace(
