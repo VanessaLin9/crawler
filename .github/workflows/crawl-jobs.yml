@@ -17,7 +17,7 @@ on:
         required: true
         default: cake,104,yourator
       reset_google_sheet:
-        description: Clear provider worksheets before syncing new results
+        description: Clear provider worksheets before syncing new results (single-keyword runs only; not supported with comma-separated keywords)
         required: true
         default: false
         type: boolean
