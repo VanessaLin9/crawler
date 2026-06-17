@@ -147,6 +147,24 @@ With that config:
 - `crawl-site all "後端"` runs only `cake` and `yourator`
 - `crawl-site 104 "後端"` still works as a direct single-provider run
 
+### Run multiple keywords
+
+You can also crawl multiple keywords in one run:
+
+```bash
+crawl-site all --keywords "後端,全端,AI"
+crawl-site cake --keywords "後端,全端"
+crawl-site 104 --keywords "後端,AI"
+```
+
+Notes:
+
+- the legacy form `crawl-site all "後端"` still works
+- do not combine a positional keyword with `--keywords`
+- multi-keyword runs increase request volume and email count
+- `--reset-google-sheet` is not supported with multi-keyword
+- Google Sheets still deduplicates by `job_url`; the first keyword written wins
+
 Rules:
 
 - if `ENABLED_SITES` is not set, `all` runs every supported provider
@@ -189,7 +207,38 @@ The repo includes a workflow for running the crawler from GitHub Actions:
 
 - [.github/workflows/crawl-jobs.yml](.github/workflows/crawl-jobs.yml)
 
-It currently uses `workflow_dispatch` first, so you can validate connectivity and output quality before relying on a schedule.
+It supports:
+
+- `workflow_dispatch`: manual runs with configurable `keywords`
+- `schedule`: daily run with the single keyword `後端`
+
+The workflow runs:
+
+```bash
+python -m crawler.cli all --keywords "<keywords>" \
+  --sync-google-sheet \
+  --send-email-notification \
+  --send-machine-email-notification
+```
+
+Manual vs scheduled behavior:
+
+- manual runs can pass `keywords` such as `後端` or `後端,全端,AI`
+- scheduled runs always use `後端` only
+- multi-keyword manual runs increase request volume and email count, so test carefully before relying on them in production
+
+Required GitHub secrets:
+
+- `GOOGLE_SHEET_ID`
+- `GOOGLE_SERVICE_ACCOUNT_JSON_CONTENT`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_USERNAME`
+- `SMTP_PASSWORD`
+- `SMTP_FROM_EMAIL`
+- `SMTP_TO_EMAIL`
+- `MACHINE_EMAIL_ENABLED`
+- `MACHINE_EMAIL_TO`
 
 ## Supported Sites
 
