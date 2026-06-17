@@ -1,6 +1,5 @@
 import argparse
 import os
-import sys
 import unittest
 from unittest.mock import patch
 
@@ -10,18 +9,18 @@ from crawler.cli import (
     SiteRunFailed,
     SiteRunSummary,
     _default_google_sheet_name,
-    _execute_requested_sites,
+    _execute_requested_runs,
     _extract_crawl_issues,
+    _format_run_summary_prefix,
     _list_cli_sites,
     _parse_keywords_arg,
-    _raise_for_failed_sites,
+    _raise_for_failed_runs,
     _resolve_google_sheet_name,
     _resolve_output_path,
     _keyword_output_slug,
     _resolve_requested_keywords,
     _resolve_requested_sites,
     _validate_runtime_args,
-    main,
 )
 
 
@@ -212,8 +211,8 @@ class CliTests(unittest.TestCase):
         with patch.dict(os.environ, {ENABLED_SITES_ENV_VAR: "104"}, clear=False):
             self.assertEqual(_resolve_requested_sites("all"), ["104"])
 
-    def test_execute_requested_sites_continues_after_one_provider_failure(self) -> None:
-        args = argparse.Namespace(output="data/results.jsonl")
+    def test_execute_requested_runs_continues_after_one_provider_failure(self) -> None:
+        args = argparse.Namespace(keyword="後端", output="data/results.jsonl")
 
         with patch(
             "crawler.cli._run_site",
@@ -221,6 +220,7 @@ class CliTests(unittest.TestCase):
                 SiteRunFailed(
                     SiteRunSummary(
                         site="cake",
+                        keyword="後端",
                         output_path="data/results-cake.jsonl",
                         crawled_pages=4,
                         records_found=10,
@@ -232,16 +232,19 @@ class CliTests(unittest.TestCase):
                 ),
                 SiteRunSummary(
                     site="104",
+                    keyword="後端",
                     output_path="data/results-104.jsonl",
                     crawled_pages=3,
                     records_found=8,
                 ),
             ],
-        ):
-            summaries = _execute_requested_sites(args, ["cake", "104"])
+        ) as run_site:
+            summaries = _execute_requested_runs(args, ["cake", "104"], ["後端"])
 
+        self.assertEqual(run_site.call_count, 2)
         self.assertEqual(len(summaries), 2)
         self.assertEqual(summaries[0].site, "cake")
+        self.assertEqual(summaries[0].keyword, "後端")
         self.assertEqual(summaries[0].error, "cake failed")
         self.assertEqual(summaries[0].output_path, "data/results-cake.jsonl")
         self.assertEqual(summaries[0].appended_count, 3)
@@ -249,9 +252,80 @@ class CliTests(unittest.TestCase):
         self.assertEqual(summaries[1].site, "104")
         self.assertEqual(summaries[1].records_found, 8)
 
-    def test_raise_for_failed_sites_raises_non_zero_exit(self) -> None:
+    def test_execute_requested_runs_uses_keyword_outer_site_inner_order(self) -> None:
+        args = argparse.Namespace(keyword="", output="data/results.jsonl")
+        calls: list[tuple[str, str]] = []
+
+        def record_run(
+            run_args: argparse.Namespace,
+            site: str,
+            *,
+            multi_site: bool,
+            multi_keyword: bool,
+        ) -> SiteRunSummary:
+            calls.append((run_args.keyword, site))
+            return SiteRunSummary(
+                site=site,
+                keyword=run_args.keyword,
+                output_path=f"data/results-{site}-{run_args.keyword}.jsonl",
+                crawled_pages=1,
+                records_found=1,
+            )
+
+        with patch("crawler.cli._run_site", side_effect=record_run):
+            summaries = _execute_requested_runs(
+                args,
+                ["cake", "104"],
+                ["後端", "全端"],
+            )
+
+        self.assertEqual(
+            calls,
+            [
+                ("後端", "cake"),
+                ("後端", "104"),
+                ("全端", "cake"),
+                ("全端", "104"),
+            ],
+        )
+        self.assertEqual(len(summaries), 4)
+        self.assertEqual(summaries[2].keyword, "全端")
+        self.assertEqual(summaries[2].site, "cake")
+
+    def test_execute_requested_runs_continues_after_keyword_run_failure(self) -> None:
+        args = argparse.Namespace(keyword="", output="data/results.jsonl")
+
+        with patch(
+            "crawler.cli._run_site",
+            side_effect=[
+                SiteRunFailed(
+                    SiteRunSummary(
+                        site="cake",
+                        keyword="後端",
+                        output_path="data/results-cake-後端.jsonl",
+                        crawled_pages=0,
+                        records_found=0,
+                    ),
+                    "cake failed",
+                ),
+                SiteRunSummary(
+                    site="cake",
+                    keyword="全端",
+                    output_path="data/results-cake-全端.jsonl",
+                    crawled_pages=2,
+                    records_found=4,
+                ),
+            ],
+        ):
+            summaries = _execute_requested_runs(args, ["cake"], ["後端", "全端"])
+
+        self.assertEqual(len(summaries), 2)
+        self.assertEqual(summaries[0].error, "cake failed")
+        self.assertEqual(summaries[1].records_found, 4)
+
+    def test_raise_for_failed_runs_raises_non_zero_exit(self) -> None:
         with self.assertRaises(SystemExit) as exc:
-            _raise_for_failed_sites(
+            _raise_for_failed_runs(
                 [
                     SiteRunSummary(
                         site="cake",
@@ -261,6 +335,7 @@ class CliTests(unittest.TestCase):
                     ),
                     SiteRunSummary(
                         site="104",
+                        keyword="後端",
                         output_path="data/results-104.jsonl",
                         crawled_pages=3,
                         records_found=8,
@@ -271,8 +346,8 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(exc.exception.code, 1)
 
-    def test_raise_for_failed_sites_allows_successful_multi_site_run(self) -> None:
-        _raise_for_failed_sites(
+    def test_raise_for_failed_runs_allows_successful_multi_site_run(self) -> None:
+        _raise_for_failed_runs(
             [
                 SiteRunSummary(
                     site="cake",
@@ -287,6 +362,19 @@ class CliTests(unittest.TestCase):
                     records_found=8,
                 ),
             ]
+        )
+
+    def test_format_run_summary_prefix_for_multi_keyword(self) -> None:
+        summary = SiteRunSummary(
+            site="cake",
+            keyword="全端",
+            output_path="data/results-cake-全端.jsonl",
+            crawled_pages=1,
+            records_found=1,
+        )
+        self.assertEqual(
+            _format_run_summary_prefix(summary, show_run_prefix=True, multi_keyword=True),
+            "全端 / cake: ",
         )
 
     def test_resolve_requested_keywords_uses_positional_keyword(self) -> None:
@@ -327,19 +415,6 @@ class CliTests(unittest.TestCase):
 
     def test_parse_keywords_arg_returns_empty_list_for_none(self) -> None:
         self.assertEqual(_parse_keywords_arg(None), [])
-
-    def test_main_rejects_multi_keyword_execution(self) -> None:
-        with patch.object(
-            sys,
-            "argv",
-            ["crawler.cli", "all", "--keywords", "後端,全端"],
-        ):
-            with patch("crawler.cli.load_dotenv"):
-                with self.assertRaisesRegex(
-                    SystemExit,
-                    "multi-keyword execution is not implemented yet",
-                ):
-                    main()
 
 
 if __name__ == "__main__":
