@@ -1,6 +1,8 @@
 import argparse
+import io
 import os
 import unittest
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from crawler.cli import (
@@ -11,9 +13,11 @@ from crawler.cli import (
     _default_google_sheet_name,
     _execute_requested_runs,
     _extract_crawl_issues,
+    _format_crawl_stats_line,
     _format_run_summary_prefix,
     _list_cli_sites,
     _parse_keywords_arg,
+    _print_site_run_summary,
     _raise_for_failed_runs,
     _resolve_google_sheet_name,
     _resolve_output_path,
@@ -432,6 +436,159 @@ class CliTests(unittest.TestCase):
 
     def test_parse_keywords_arg_returns_empty_list_for_none(self) -> None:
         self.assertEqual(_parse_keywords_arg(None), [])
+
+    def test_format_crawl_stats_line_sync_mode(self) -> None:
+        summary = SiteRunSummary(
+            site="cake",
+            keyword="後端",
+            output_path="data/results.jsonl",
+            crawled_pages=9,
+            records_found=180,
+            appended_count=3,
+            skipped_count=177,
+        )
+        self.assertEqual(
+            _format_crawl_stats_line(summary, sync_google_sheet=True),
+            "[crawl-stats] site=cake keyword=後端 pages=9 found=180 "
+            "sheet_skip=177 sheet_new=3",
+        )
+
+    def test_format_crawl_stats_line_non_sync_mode(self) -> None:
+        summary = SiteRunSummary(
+            site="104",
+            keyword="全端",
+            output_path="data/results.jsonl",
+            crawled_pages=5,
+            records_found=42,
+        )
+        self.assertEqual(
+            _format_crawl_stats_line(summary, sync_google_sheet=False),
+            "[crawl-stats] site=104 keyword=全端 pages=5 found=42 "
+            "sheet_skip=n/a sheet_new=n/a",
+        )
+
+    def test_print_site_run_summary_sync_mode_includes_crawl_stats(self) -> None:
+        summary = SiteRunSummary(
+            site="cake",
+            keyword="後端",
+            output_path="data/results.jsonl",
+            crawled_pages=9,
+            records_found=180,
+            appended_count=3,
+            skipped_count=177,
+            sheet_name="cake_jobs",
+        )
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=True,
+                send_email_notification=False,
+                show_run_prefix=False,
+                multi_keyword=False,
+            )
+
+        self.assertEqual(
+            buffer.getvalue(),
+            "synced 3 new rows to cake_jobs; skipped 177 duplicates.\n"
+            "[crawl-stats] site=cake keyword=後端 pages=9 found=180 "
+            "sheet_skip=177 sheet_new=3\n",
+        )
+
+    def test_print_site_run_summary_non_sync_mode_includes_crawl_stats(self) -> None:
+        summary = SiteRunSummary(
+            site="yourator",
+            keyword="AI",
+            output_path="data/results.jsonl",
+            crawled_pages=2,
+            records_found=11,
+        )
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=False,
+                send_email_notification=False,
+                show_run_prefix=False,
+                multi_keyword=False,
+            )
+
+        self.assertEqual(
+            buffer.getvalue(),
+            "crawled 2 pages and found 11 jobs.\n"
+            "[crawl-stats] site=yourator keyword=AI pages=2 found=11 "
+            "sheet_skip=n/a sheet_new=n/a\n",
+        )
+
+    def test_print_site_run_summary_failed_run_omits_crawl_stats(self) -> None:
+        summary = SiteRunSummary(
+            site="cake",
+            keyword="後端",
+            output_path="data/results.jsonl",
+            crawled_pages=0,
+            records_found=0,
+            error="network timeout",
+        )
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=True,
+                send_email_notification=False,
+                show_run_prefix=True,
+                multi_keyword=False,
+            )
+
+        self.assertEqual(buffer.getvalue(), "cake: failed: network timeout\n")
+
+    def test_print_site_run_summary_multi_keyword_prints_per_keyword_stats(
+        self,
+    ) -> None:
+        summaries = [
+            SiteRunSummary(
+                site="cake",
+                keyword="後端",
+                output_path="data/results-cake-後端.jsonl",
+                crawled_pages=9,
+                records_found=180,
+                appended_count=2,
+                skipped_count=178,
+                sheet_name="cake_jobs",
+            ),
+            SiteRunSummary(
+                site="cake",
+                keyword="全端",
+                output_path="data/results-cake-全端.jsonl",
+                crawled_pages=9,
+                records_found=150,
+                appended_count=1,
+                skipped_count=149,
+                sheet_name="cake_jobs",
+            ),
+        ]
+        lines: list[str] = []
+        for summary in summaries:
+            buffer = io.StringIO()
+            with redirect_stdout(buffer):
+                _print_site_run_summary(
+                    summary,
+                    sync_google_sheet=True,
+                    send_email_notification=False,
+                    show_run_prefix=True,
+                    multi_keyword=True,
+                )
+            lines.append(buffer.getvalue())
+
+        self.assertIn(
+            "[crawl-stats] site=cake keyword=後端 pages=9 found=180 "
+            "sheet_skip=178 sheet_new=2",
+            lines[0],
+        )
+        self.assertIn(
+            "[crawl-stats] site=cake keyword=全端 pages=9 found=150 "
+            "sheet_skip=149 sheet_new=1",
+            lines[1],
+        )
 
 
 if __name__ == "__main__":
