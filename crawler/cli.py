@@ -558,6 +558,25 @@ def _execute_requested_runs(
     return summaries
 
 
+def _format_crawl_stats_line(
+    summary: SiteRunSummary,
+    *,
+    sync_google_sheet: bool,
+) -> str:
+    if sync_google_sheet:
+        sheet_skip = summary.skipped_count
+        sheet_new = summary.appended_count
+    else:
+        sheet_skip = "n/a"
+        sheet_new = "n/a"
+
+    return (
+        f"[crawl-stats] site={summary.site} keyword={summary.keyword} "
+        f"pages={summary.crawled_pages} found={summary.records_found} "
+        f"sheet_skip={sheet_skip} sheet_new={sheet_new}"
+    )
+
+
 def _print_site_run_summary(
     summary: SiteRunSummary,
     *,
@@ -596,12 +615,13 @@ def _print_site_run_summary(
                     )
             else:
                 print(f"{prefix}no new jobs found; skipped email notification.")
-        return
+    else:
+        print(
+            f"{prefix}crawled {summary.crawled_pages} pages and found "
+            f"{summary.records_found} jobs."
+        )
 
-    print(
-        f"{prefix}crawled {summary.crawled_pages} pages and found "
-        f"{summary.records_found} jobs."
-    )
+    print(_format_crawl_stats_line(summary, sync_google_sheet=sync_google_sheet))
 
 
 def _format_run_summary_prefix(
