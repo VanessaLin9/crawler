@@ -2,7 +2,7 @@
 
 English version: [README.en.md](README.en.md)
 
-用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成三個 provider：`Cake`、`104` 與 `Yourator`。
+用來抓職缺站搜尋結果的 Python 爬蟲專案，目前已完成四個 provider：`Cake`、`104`、`Yourator` 與 `WWR`（We Work Remotely，手動執行）。
 
 這個專案目前已經打通：
 
@@ -56,7 +56,7 @@ cp .env.sample .env
 - `GOOGLE_SHEET_ID`: Google Sheet 的 spreadsheet ID
   可以從 Google Sheet URL 中間那段拿到
 - `GOOGLE_SHEET_NAME`: 可選，自訂要寫入的工作表名稱
-  如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`、`yourator_jobs`
+  如果不填，程式會依站台自動分流，例如 `cake_jobs`、`104_jobs`、`yourator_jobs`、`wwr_jobs`
 - `ENABLED_SITES`: 可選，用逗號分隔指定 `all` 模式要跑哪些 provider
   例如 `cake,104,yourator`
   只影響 `crawl-site all ...`，單獨跑 `crawl-site <provider> ...` 不受影響
@@ -97,6 +97,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON=secrets/google-service-account.json
 - `cake` -> `cake_jobs`
 - `104` -> `104_jobs`
 - `yourator` -> `yourator_jobs`
+- `wwr` -> `wwr_jobs`
 
 ## 最常用指令
 
@@ -130,6 +131,27 @@ crawl-site 104 "後端"
 ```bash
 crawl-site yourator "後端"
 ```
+
+### WWR（We Work Remotely，手動執行）
+
+`wwr` 使用 [We Work Remotely 官方 RSS feed](https://weworkremotely.com/remote-job-rss-feed) 抓遠端職缺，目前**只支援手動 CLI**，尚未加入 `all` 模式或 GitHub Actions 排程。
+
+支援的 keyword groups：
+
+- 後端 / backend
+- 全端 / fullstack
+- 前端 / frontend
+- AI group（例如 `AI`、`LLM`、`RAG`、`GenAI`、`Prompt Engineering`）
+
+範例：
+
+```bash
+crawl-site wwr "後端"
+crawl-site wwr --keywords "後端,AI"
+crawl-site wwr "AI" --sync-google-sheet
+```
+
+`AI` keyword 會同時讀 Backend 與 Full-Stack RSS，並在 item 層做 AI 相關過濾；其他 category keyword 則直接使用對應 category feed。
 
 ### 爬完後同步到 Google Sheet
 
@@ -181,6 +203,7 @@ crawl-site all "後端" --sync-google-sheet --send-email-notification --send-mac
 - 再跑 `104`
 - 再跑 `yourator`
 - 分別寫入 `cake_jobs`、`104_jobs` 與 `yourator_jobs`
+- `wwr` 目前不在 `all` 模式內；要抓 WWR 請直接跑 `crawl-site wwr ...`
 - 各自寄出人類摘要信與 JSON 通知信
 - 最後在 terminal 印出 total summary
 
@@ -407,6 +430,7 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 - `104`
 - `cake`
 - `yourator`
+- `wwr`
 - `generic`
 
 ### 104
@@ -464,6 +488,23 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 - 目前 V1 主要是從 jobs list 做本地 keyword match，屬於較保守的 matching 策略
 - `content_updated_at` 目前統一收斂成 `YYYY-MM-DD`
 - `面議（經常性薪資達X萬元）` 會保留 `negotiable`，同時把 `salary_min` 正規化成對應下限數字
+
+### WWR
+
+`wwr` 使用 We Work Remotely 官方 category RSS feed，不走 HTML 搜尋頁或職缺詳情頁。
+
+資料來源：
+
+- [We Work Remotely RSS Feed](https://weworkremotely.com/remote-job-rss-feed)
+
+目前預設會把結果寫到 `wwr_jobs` worksheet，欄位仍沿用共同的 24 欄 schema。
+
+備註：
+
+- 目前只支援手動 CLI，不在 `all` 模式或 GitHub Actions 排程內
+- category keyword（後端 / 全端 / 前端）直接使用對應 RSS feed
+- `AI` keyword 會讀 Backend + Full-Stack feed，並在 item 層做 AI 相關過濾
+- 不支援的 keyword 會 fail closed，不會靜默 fallback 到其他 feed
 
 ### Generic
 
