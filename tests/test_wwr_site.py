@@ -1,7 +1,15 @@
 import unittest
 from pathlib import Path
 
+from crawler.cli import (
+    MULTI_SITE_EXCLUDED_SITES,
+    _default_google_sheet_name,
+    _list_cli_sites,
+    _resolve_output_path,
+    _resolve_requested_sites,
+)
 from crawler.records import flatten_job_records
+from crawler.sites.registry import build_site_adapter, list_sites
 from crawler.sites.wwr import (
     AI_KEYWORDS,
     WWR_BACKEND_FEED,
@@ -258,6 +266,38 @@ class WwrRssMappingTests(unittest.TestCase):
         self.assertEqual(len(records), 3)
         self.assertEqual(records[0].source_site, "wwr")
         self.assertEqual(records[0].search_page_url, WWR_BACKEND_FEED)
+
+
+class WwrRegistryIntegrationTests(unittest.TestCase):
+    def test_list_sites_includes_wwr(self) -> None:
+        self.assertIn("wwr", list_sites())
+
+    def test_list_cli_sites_includes_wwr(self) -> None:
+        self.assertIn("wwr", _list_cli_sites())
+
+    def test_all_mode_excludes_wwr(self) -> None:
+        self.assertIn("wwr", MULTI_SITE_EXCLUDED_SITES)
+        self.assertEqual(_resolve_requested_sites("all"), ["cake", "104", "yourator"])
+        self.assertNotIn("wwr", _resolve_requested_sites("all"))
+
+    def test_direct_wwr_site_remains_available(self) -> None:
+        self.assertEqual(_resolve_requested_sites("wwr"), ["wwr"])
+
+    def test_build_site_adapter_returns_wwr_adapter(self) -> None:
+        from crawler.core.models import CrawlConfig
+
+        adapter = build_site_adapter(CrawlConfig(site="wwr", keyword="後端"))
+        self.assertEqual(adapter.name, "wwr")
+        self.assertEqual(adapter.build_start_urls("後端"), [WWR_BACKEND_FEED])
+
+    def test_default_google_sheet_name_for_wwr(self) -> None:
+        self.assertEqual(_default_google_sheet_name("wwr"), "wwr_jobs")
+
+    def test_resolve_output_path_for_single_site_wwr(self) -> None:
+        self.assertEqual(
+            _resolve_output_path("data/results.jsonl", "wwr", multi_site=False),
+            "data/results.jsonl",
+        )
 
 
 if __name__ == "__main__":

@@ -34,7 +34,7 @@ from crawler.sites.registry import list_sites
 
 ALL_SITES_TOKEN = "all"
 ENABLED_SITES_ENV_VAR = "ENABLED_SITES"
-MULTI_SITE_EXCLUDED_SITES = {"generic"}
+MULTI_SITE_EXCLUDED_SITES = {"generic", "wwr"}
 LEGACY_MULTI_SITE_ORDER = ["cake", "104", "yourator"]
 
 
