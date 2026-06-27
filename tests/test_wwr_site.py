@@ -1,13 +1,21 @@
+import argparse
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import xml.etree.ElementTree as ET
 
 from crawler.cli import (
     MULTI_SITE_EXCLUDED_SITES,
     _default_google_sheet_name,
+    _execute_requested_runs,
     _list_cli_sites,
     _resolve_output_path,
     _resolve_requested_sites,
 )
+from crawler.core.fetcher import FetchResponse
+from crawler.core.models import CrawlConfig
+from crawler.core.spider import crawl
 from crawler.records import flatten_job_records
 from crawler.sites.registry import build_site_adapter, list_sites
 from crawler.sites.wwr import (
@@ -298,6 +306,142 @@ class WwrRegistryIntegrationTests(unittest.TestCase):
             _resolve_output_path("data/results.jsonl", "wwr", multi_site=False),
             "data/results.jsonl",
         )
+
+
+class WwrFailurePathTests(unittest.TestCase):
+    def test_parse_rss_feed_raises_on_malformed_xml(self) -> None:
+        with self.assertRaises(ET.ParseError):
+            parse_rss_feed("<rss><channel><item></rss>", "後端")
+
+    @patch("crawler.core.spider.write_results")
+    @patch("crawler.core.spider.time.sleep")
+    @patch("crawler.core.spider.fetch_html")
+    def test_crawl_keeps_valid_ai_feed_when_other_feed_is_malformed(
+        self,
+        mock_fetch_html,
+        _mock_sleep,
+        _mock_write_results,
+    ) -> None:
+        def fetch_side_effect(
+            _session,
+            url: str,
+            *,
+            timeout: float,
+        ) -> FetchResponse:
+            if url == WWR_BACKEND_FEED:
+                return FetchResponse(status_code=200, text=AI_FILTER_SAMPLE_RSS)
+            return FetchResponse(status_code=200, text="<rss><channel><item></rss>")
+
+        mock_fetch_html.side_effect = fetch_side_effect
+        results = crawl(
+            CrawlConfig(
+                site="wwr",
+                keyword="AI",
+                max_pages=2,
+                delay_seconds=0,
+                output_path="data/test-wwr-ai-failure.jsonl",
+            )
+        )
+
+        self.assertEqual(len(results), 2)
+        successful = [result for result in results if not result.get("error")]
+        failed = [result for result in results if result.get("error")]
+        self.assertEqual(len(successful), 1)
+        self.assertEqual(len(failed), 1)
+        self.assertEqual(successful[0]["url"], WWR_BACKEND_FEED)
+        self.assertGreater(len(successful[0]["matches"]), 0)
+        self.assertEqual(failed[0]["url"], WWR_FULL_STACK_FEED)
+
+    @patch("crawler.core.spider.write_results")
+    @patch("crawler.core.spider.time.sleep")
+    @patch("crawler.core.spider.fetch_html")
+    def test_crawl_records_fetch_error_for_failed_ai_feed(
+        self,
+        mock_fetch_html,
+        _mock_sleep,
+        _mock_write_results,
+    ) -> None:
+        def fetch_side_effect(
+            _session,
+            url: str,
+            *,
+            timeout: float,
+        ) -> FetchResponse:
+            if url == WWR_BACKEND_FEED:
+                return FetchResponse(status_code=200, text=AI_FILTER_SAMPLE_RSS)
+            raise TimeoutError("feed timeout")
+
+        mock_fetch_html.side_effect = fetch_side_effect
+        results = crawl(
+            CrawlConfig(
+                site="wwr",
+                keyword="AI",
+                max_pages=2,
+                delay_seconds=0,
+                output_path="data/test-wwr-ai-timeout.jsonl",
+            )
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertFalse(results[0].get("error"))
+        self.assertEqual(results[1]["error"], "feed timeout")
+
+    def test_build_start_urls_rejects_unsupported_keyword_before_fetch(self) -> None:
+        adapter = WwrJobsAdapter("devops")
+        with self.assertRaisesRegex(ValueError, "Unsupported WWR keyword 'devops'"):
+            adapter.build_start_urls("devops")
+
+    @patch("crawler.cli.crawl")
+    def test_execute_requested_runs_continues_after_unsupported_wwr_keyword(
+        self,
+        mock_crawl,
+    ) -> None:
+        def crawl_side_effect(config: CrawlConfig) -> list[dict]:
+            if config.keyword == "devops":
+                raise ValueError("Unsupported WWR keyword 'devops'. Supported keyword groups: ...")
+            return [
+                {
+                    "site": "wwr",
+                    "keyword": config.keyword,
+                    "url": WWR_BACKEND_FEED,
+                    "matches": parse_rss_feed(BACKEND_SAMPLE_RSS, config.keyword)[:1],
+                }
+            ]
+
+        mock_crawl.side_effect = crawl_side_effect
+        args = argparse.Namespace(
+            keyword="",
+            output="data/results.jsonl",
+            sync_google_sheet=False,
+            send_email_notification=False,
+            reset_google_sheet=False,
+            google_sheet_id=None,
+            google_sheet_name=None,
+            google_service_account="",
+            max_pages=9,
+            per_page=20,
+            delay=0,
+            timeout=30,
+            user_agent="test",
+            search_url_template=None,
+            send_machine_email_notification=False,
+            machine_email_to="",
+            smtp_host=None,
+            smtp_port=587,
+            smtp_username="",
+            smtp_password="",
+            smtp_from_email=None,
+            smtp_to_email=None,
+            smtp_no_tls=False,
+        )
+
+        summaries = _execute_requested_runs(args, ["wwr"], ["後端", "devops"])
+
+        self.assertEqual(len(summaries), 2)
+        self.assertEqual(summaries[0].keyword, "後端")
+        self.assertFalse(summaries[0].error)
+        self.assertEqual(summaries[1].keyword, "devops")
+        self.assertIn("Unsupported WWR keyword 'devops'", summaries[1].error)
 
 
 if __name__ == "__main__":
