@@ -16,6 +16,10 @@ from crawler.sites.wwr import (
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures" / "wwr"
 BACKEND_SAMPLE_RSS = (FIXTURES_DIR / "backend_sample.rss").read_text(encoding="utf-8")
+AI_FILTER_SAMPLE_RSS = (FIXTURES_DIR / "ai_filter_sample.rss").read_text(encoding="utf-8")
+AI_DUPLICATE_FULLSTACK_RSS = (
+    FIXTURES_DIR / "ai_duplicate_fullstack.rss"
+).read_text(encoding="utf-8")
 
 
 class WwrFeedSelectionTests(unittest.TestCase):
@@ -160,10 +164,65 @@ class WwrRssMappingTests(unittest.TestCase):
             ["Senior Backend Engineer", "Solo Founder Role", "Platform Engineer"],
         )
 
-    def test_ai_keyword_group_does_not_set_category_matched_fields_yet(self) -> None:
-        matches = parse_rss_feed(BACKEND_SAMPLE_RSS, "AI")
-        self.assertEqual(matches[0]["matched_fields"], [])
-        self.assertEqual(matches[0]["matched_terms"], [])
+    def test_ai_keyword_group_filters_items_by_title_skills_and_description(self) -> None:
+        matches = parse_rss_feed(AI_FILTER_SAMPLE_RSS, "AI")
+        self.assertEqual(len(matches), 4)
+        self.assertEqual(matches[0]["title"], "LLM Platform Engineer")
+        self.assertEqual(matches[0]["matched_fields"], ["title"])
+        self.assertEqual(matches[0]["matched_terms"], ["LLM"])
+
+        skills_match = matches[1]
+        self.assertEqual(skills_match["title"], "Backend Engineer")
+        self.assertEqual(skills_match["matched_fields"], ["skills"])
+        self.assertEqual(skills_match["matched_terms"], ["RAG"])
+
+        description_match = matches[2]
+        self.assertEqual(description_match["title"], "Software Engineer")
+        self.assertEqual(description_match["matched_fields"], ["description"])
+        self.assertEqual(description_match["matched_terms"], ["Generative AI"])
+
+    def test_ai_filter_rejects_generic_ai_disclaimer_in_description_only(self) -> None:
+        matches = parse_rss_feed(AI_FILTER_SAMPLE_RSS, "AI")
+        titles = [match["title"] for match in matches]
+        self.assertNotIn("Recruiting Coordinator", titles)
+
+    def test_ai_filter_does_not_match_ai_inside_paid(self) -> None:
+        matches = parse_rss_feed(AI_FILTER_SAMPLE_RSS, "AI")
+        titles = [match["title"] for match in matches]
+        self.assertNotIn("Accounts Payable Specialist", titles)
+
+    def test_ai_filter_dedupes_same_job_url_across_backend_and_full_stack_feeds(self) -> None:
+        backend_matches = parse_rss_feed(AI_FILTER_SAMPLE_RSS, "AI")
+        full_stack_matches = parse_rss_feed(AI_DUPLICATE_FULLSTACK_RSS, "AI")
+        records = flatten_job_records(
+            [
+                {
+                    "site": "wwr",
+                    "keyword": "AI",
+                    "url": WWR_BACKEND_FEED,
+                    "matches": backend_matches,
+                },
+                {
+                    "site": "wwr",
+                    "keyword": "AI",
+                    "url": WWR_FULL_STACK_FEED,
+                    "matches": full_stack_matches,
+                },
+            ],
+            discovered_at="2026-06-27T00:00:00+00:00",
+        )
+        shared_records = [
+            record
+            for record in records
+            if record.job_url
+            == "https://weworkremotely.com/remote-jobs/shared-corp-ai-platform-engineer"
+        ]
+        self.assertEqual(len(shared_records), 1)
+        self.assertEqual(shared_records[0].matched_fields, ["skills"])
+        self.assertEqual(
+            shared_records[0].matched_terms,
+            ["LLM", "Prompt Engineering"],
+        )
 
     def test_flatten_job_records_accepts_wwr_matches(self) -> None:
         matches = parse_rss_feed(BACKEND_SAMPLE_RSS, "後端")

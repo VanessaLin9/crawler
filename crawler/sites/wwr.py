@@ -53,6 +53,24 @@ AI_KEYWORDS: tuple[str, ...] = (
     "Prompt Engineering",
 )
 
+AI_DESCRIPTION_HIGH_SIGNAL_TERMS: tuple[str, ...] = (
+    "Generative AI",
+    "GenAI",
+    "LLM",
+    "Large Language Models",
+    "Large Language Model",
+    "RAG",
+    "Retrieval Augmented Generation",
+    "AI Agents",
+    "AI Agent",
+    "Agentic",
+    "MCP",
+    "Model Context Protocol",
+    "Tool Calling",
+    "Function Calling",
+    "Prompt Engineering",
+)
+
 SUPPORTED_KEYWORD_GROUP_LABELS: tuple[str, ...] = (
     "後端 (backend)",
     "全端 (fullstack)",
@@ -200,10 +218,16 @@ def _parse_rss_item(item: ET.Element, *, keyword_group: str) -> dict | None:
     description_html = _child_text(item, "description")
     category = _child_text(item, "category")
     skills = _child_text(item, "skills")
+    summary = _html_to_plain_text(description_html)
 
     matched_fields: list[str] = []
     matched_terms: list[str] = []
-    if keyword_group != "ai" and category:
+    if keyword_group == "ai":
+        ai_match = _match_ai_item(title, skills, summary)
+        if ai_match is None:
+            return None
+        matched_fields, matched_terms = ai_match
+    elif category:
         matched_fields = ["category"]
         matched_terms = [category]
 
@@ -220,7 +244,7 @@ def _parse_rss_item(item: ET.Element, *, keyword_group: str) -> dict | None:
         ),
         "employment_type": _child_text(item, "type"),
         "tags": _build_tags(category, skills),
-        "summary": _html_to_plain_text(description_html),
+        "summary": summary,
         "content_updated_at": _parse_pub_date(_child_text(item, "pubDate")),
         "matched_fields": matched_fields,
         "matched_terms": matched_terms,
@@ -301,3 +325,54 @@ def _parse_pub_date(raw_value: str) -> str:
         return parsedate_to_datetime(raw_value).date().isoformat()
     except (TypeError, ValueError, OverflowError):
         return ""
+
+
+def _match_ai_item(
+    title: str,
+    skills: str,
+    summary: str,
+) -> tuple[list[str], list[str]] | None:
+    title_hits = _find_matching_terms(title, AI_KEYWORDS)
+    skills_hits = _find_matching_terms(skills, AI_KEYWORDS)
+    description_hits = _find_matching_terms(summary, AI_DESCRIPTION_HIGH_SIGNAL_TERMS)
+
+    if not title_hits and not skills_hits and not description_hits:
+        return None
+
+    matched_fields: list[str] = []
+    matched_terms: list[str] = []
+    if title_hits:
+        matched_fields.append("title")
+        matched_terms.extend(title_hits)
+    if skills_hits:
+        matched_fields.append("skills")
+        matched_terms.extend(skills_hits)
+    if description_hits:
+        matched_fields.append("description")
+        matched_terms.extend(description_hits)
+
+    return matched_fields, _dedupe_preserve_order(matched_terms)
+
+
+def _find_matching_terms(text: str, terms: tuple[str, ...]) -> list[str]:
+    if not text.strip():
+        return []
+
+    hits: list[str] = []
+    for term in terms:
+        if _compile_term_pattern(term).search(text):
+            hits.append(term)
+    return hits
+
+
+def _compile_term_pattern(term: str) -> re.Pattern[str]:
+    stripped = term.strip()
+    if not stripped:
+        return re.compile(r"a^")
+    if stripped.isascii() and " " not in stripped:
+        return re.compile(rf"\b{re.escape(stripped)}\b", re.IGNORECASE)
+    return re.compile(re.escape(stripped), re.IGNORECASE)
+
+
+def _dedupe_preserve_order(values: list[str]) -> list[str]:
+    return list(dict.fromkeys(values))

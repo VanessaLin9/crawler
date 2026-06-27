@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>We Work Remotely: AI Filter Sample</title>
+    <item>
+      <title>Acme Corp: LLM Platform Engineer</title>
+      <link>https://weworkremotely.com/remote-jobs/acme-llm-platform-engineer</link>
+      <skills>Python, PostgreSQL</skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Build APIs.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Data Corp: Backend Engineer</title>
+      <link>https://weworkremotely.com/remote-jobs/data-corp-backend-engineer</link>
+      <skills>RAG, Python</skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Data pipelines.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Plain Corp: Software Engineer</title>
+      <link>https://weworkremotely.com/remote-jobs/plain-corp-software-engineer</link>
+      <skills>Python</skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;We use Generative AI in our workflow.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>HR Corp: Recruiting Coordinator</title>
+      <link>https://weworkremotely.com/remote-jobs/hr-corp-recruiting-coordinator</link>
+      <skills>Recruiting</skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;1Password uses artificial intelligence (AI) and machine learning (ML) technologies, including natural language processing and predictive analytics, to assist in the initial screening of employment applications.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Billing Corp: Accounts Payable Specialist</title>
+      <link>https://weworkremotely.com/remote-jobs/billing-corp-accounts-payable-specialist</link>
+      <skills>Accounting, paid invoices</skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Manage paid vendor invoices.&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>Shared Corp: Platform Engineer</title>
+      <link>https://weworkremotely.com/remote-jobs/shared-corp-ai-platform-engineer</link>
+      <skills>LLM</skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Shared backend feed item.&lt;/p&gt;</description>
+    </item>
+  </channel>
+</rss>
