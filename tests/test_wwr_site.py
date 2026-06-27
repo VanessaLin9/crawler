@@ -8,6 +8,7 @@ from crawler.sites.wwr import (
     WWR_FRONT_END_FEED,
     WWR_FULL_STACK_FEED,
     WwrJobsAdapter,
+    _find_matching_terms,
     parse_rss_feed,
     resolve_feed_urls,
     resolve_keyword_group,
@@ -190,6 +191,23 @@ class WwrRssMappingTests(unittest.TestCase):
         matches = parse_rss_feed(AI_FILTER_SAMPLE_RSS, "AI")
         titles = [match["title"] for match in matches]
         self.assertNotIn("Accounts Payable Specialist", titles)
+
+    def test_ai_filter_does_not_match_ai_agent_inside_openai_agent(self) -> None:
+        self.assertEqual(_find_matching_terms("OpenAI Agent Platform", ("AI Agent",)), [])
+        self.assertEqual(
+            _find_matching_terms("Senior AI Agent Engineer", ("AI Agent",)),
+            ["AI Agent"],
+        )
+
+    def test_ai_filter_does_not_match_tool_calling_inside_compound_word(self) -> None:
+        self.assertEqual(
+            _find_matching_terms("MultiTool Calling framework", ("Tool Calling",)),
+            [],
+        )
+        self.assertEqual(
+            _find_matching_terms("Experience with Tool Calling required", ("Tool Calling",)),
+            ["Tool Calling"],
+        )
 
     def test_ai_filter_dedupes_same_job_url_across_backend_and_full_stack_feeds(self) -> None:
         backend_matches = parse_rss_feed(AI_FILTER_SAMPLE_RSS, "AI")

@@ -369,8 +369,9 @@ def _compile_term_pattern(term: str) -> re.Pattern[str]:
     stripped = term.strip()
     if not stripped:
         return re.compile(r"a^")
-    if stripped.isascii() and " " not in stripped:
-        return re.compile(rf"\b{re.escape(stripped)}\b", re.IGNORECASE)
+    if stripped.isascii():
+        escaped = re.escape(stripped)
+        return re.compile(rf"(?<![\w]){escaped}(?![\w])", re.IGNORECASE)
     return re.compile(re.escape(stripped), re.IGNORECASE)
 
 
