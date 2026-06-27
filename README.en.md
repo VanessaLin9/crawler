@@ -2,7 +2,7 @@
 
 中文版本: [README.md](README.md)
 
-A Python job-search crawler focused on Taiwanese job platforms. The project currently supports three providers: `Cake`, `104`, and `Yourator`.
+A Python job-search crawler focused on Taiwanese job platforms. The project currently supports four providers: `Cake`, `104`, `Yourator`, and `WWR` (We Work Remotely, manual-only).
 
 It can:
 
@@ -78,6 +78,7 @@ If you do not specify a worksheet name, the crawler routes each provider to its 
 - `cake` -> `cake_jobs`
 - `104` -> `104_jobs`
 - `yourator` -> `yourator_jobs`
+- `wwr` -> `wwr_jobs`
 
 ## Common Commands
 
@@ -101,6 +102,27 @@ crawl-site cake "後端"
 crawl-site 104 "後端"
 crawl-site yourator "後端"
 ```
+
+### WWR (We Work Remotely, manual-only)
+
+`wwr` uses the [official We Work Remotely RSS feeds](https://weworkremotely.com/remote-job-rss-feed). It is currently **manual CLI only** and is not included in `all` mode or the GitHub Actions schedule.
+
+Supported keyword groups:
+
+- backend / 後端
+- fullstack / 全端
+- frontend / 前端
+- AI group (`AI`, `LLM`, `RAG`, `GenAI`, `Prompt Engineering`, and related aliases)
+
+Examples:
+
+```bash
+crawl-site wwr "後端"
+crawl-site wwr --keywords "後端,AI"
+crawl-site wwr "AI" --sync-google-sheet
+```
+
+The `AI` keyword reads both Backend and Full-Stack RSS feeds and applies item-level AI filtering. Other category keywords use their category feed directly.
 
 ### Crawl and sync to Google Sheets
 
@@ -129,6 +151,7 @@ This runs:
 - `cake`
 - `104`
 - `yourator`
+- `wwr` is excluded from `all` mode for now; run `crawl-site wwr ...` directly when needed
 
 And writes to:
 
@@ -267,6 +290,23 @@ Notes:
 - V1 uses a conservative local keyword match strategy on top of the public jobs list
 - `content_updated_at` is normalized to `YYYY-MM-DD`
 - `面議（經常性薪資達X萬元）` keeps `salary_type=negotiable` while normalizing the salary floor into `salary_min`
+
+### WWR
+
+`wwr` uses official We Work Remotely category RSS feeds. It does not scrape HTML search pages or job detail pages.
+
+Source:
+
+- [We Work Remotely RSS Feed](https://weworkremotely.com/remote-job-rss-feed)
+
+Results sync to the shared 24-column schema in `wwr_jobs`.
+
+Notes:
+
+- manual CLI only; not in `all` mode or GitHub Actions schedule yet
+- category keywords map directly to category RSS feeds
+- the `AI` keyword reads Backend + Full-Stack feeds and applies item-level AI filtering
+- unsupported keywords fail closed instead of falling back to another feed
 
 ### Generic
 
