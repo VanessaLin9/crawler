@@ -25,7 +25,6 @@ REGISTRY: dict[str, AdapterFactory] = {
     "cake": lambda config: CakeItJobsAdapter(
         config.keyword,
         per_page=config.per_page,
-        use_search_api=True,
     ),
     "generic": _build_generic_from_config,
     "yourator": lambda config: YouratorJobsAdapter(

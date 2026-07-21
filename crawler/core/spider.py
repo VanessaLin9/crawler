@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from collections import deque
 
-from crawler.core.fetcher import build_session, fetch_html
+from crawler.core.fetcher import build_session
 from crawler.core.models import CrawlConfig
 from crawler.core.output import write_results
 from crawler.sites.registry import build_site_adapter
@@ -26,7 +26,11 @@ def crawl(config: CrawlConfig) -> list[dict]:
         visited.add(url)
 
         try:
-            response = fetch_html(session, url, timeout=config.timeout_seconds)
+            response = adapter.fetch_page(
+                session,
+                url,
+                timeout=config.timeout_seconds,
+            )
             parsed = adapter.parse_page(url, response.text, config.keyword)
             record = {
                 "site": config.site,
