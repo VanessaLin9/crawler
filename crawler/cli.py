@@ -17,6 +17,7 @@ from crawler.emailer import (
 from crawler.env import load_dotenv
 from crawler.google_sheets import (
     DEFAULT_GOOGLE_SERVICE_ACCOUNT,
+    SheetSyncResult,
     sync_job_records,
 )
 from crawler.records import flatten_job_records
@@ -458,13 +459,24 @@ def _run_site(
             explicit_name=args.google_sheet_name,
             env_name=os.getenv("GOOGLE_SHEET_NAME"),
         )
-        sync_result = sync_job_records(
-            records=records,
-            spreadsheet_id=args.google_sheet_id,
-            sheet_name=sheet_name,
-            service_account_path=args.google_service_account,
-            reset_sheet=args.reset_google_sheet,
-        )
+        # Issue-only runs must not reset/sync: empty records + --reset-google-sheet
+        # would clear existing Sheet rows before any append happens.
+        if crawl_issues and not records:
+            sync_result = SheetSyncResult(
+                appended_count=0,
+                appended_records=[],
+                skipped_count=0,
+                sheet_name=sheet_name,
+                spreadsheet_id=args.google_sheet_id or "",
+            )
+        else:
+            sync_result = sync_job_records(
+                records=records,
+                spreadsheet_id=args.google_sheet_id,
+                sheet_name=sheet_name,
+                service_account_path=args.google_service_account,
+                reset_sheet=args.reset_google_sheet,
+            )
         summary.appended_count = sync_result.appended_count
         summary.skipped_count = sync_result.skipped_count
         summary.sheet_name = sync_result.sheet_name

@@ -24,6 +24,7 @@ from crawler.cli import (
     _keyword_output_slug,
     _resolve_requested_keywords,
     _resolve_requested_sites,
+    _run_site,
     _validate_reset_google_sheet,
     _validate_runtime_args,
 )
@@ -78,6 +79,53 @@ class CliTests(unittest.TestCase):
                 "104 search API request failed after establishing an anonymous session. Cookie/session behavior may have changed. (page: https://www.104.com.tw/jobs/search/?keyword=%E5%BE%8C%E7%AB%AF)"
             ],
         )
+
+    @patch("crawler.cli.sync_job_records")
+    @patch("crawler.cli.crawl")
+    def test_run_site_skips_sheet_sync_for_issue_only_reset_run(
+        self,
+        mock_crawl,
+        mock_sync_job_records,
+    ) -> None:
+        mock_crawl.return_value = [
+            {
+                "site": "cake",
+                "keyword": "後端",
+                "url": "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                "error": "Cake Search API HTTP error: 403 Forbidden",
+            }
+        ]
+        args = argparse.Namespace(
+            keyword="後端",
+            max_pages=1,
+            per_page=20,
+            delay=0,
+            timeout=5,
+            output="data/results.jsonl",
+            user_agent="search-crawler/test",
+            search_url_template=None,
+            sync_google_sheet=True,
+            google_sheet_id="sheet-123",
+            google_sheet_name=None,
+            google_service_account="secrets/google-service-account.json",
+            reset_google_sheet=True,
+            send_email_notification=False,
+            send_machine_email_notification=False,
+        )
+
+        summary = _run_site(
+            args,
+            "cake",
+            multi_site=False,
+            multi_keyword=False,
+        )
+
+        mock_sync_job_records.assert_not_called()
+        self.assertEqual(summary.records_found, 0)
+        self.assertEqual(summary.appended_count, 0)
+        self.assertEqual(summary.sheet_name, "cake_jobs")
+        self.assertEqual(len(summary.crawl_issues), 1)
+        self.assertIn("Cake Search API HTTP error: 403", summary.crawl_issues[0])
 
     def test_list_cli_sites_includes_all_mode(self) -> None:
         self.assertEqual(_list_cli_sites()[0], ALL_SITES_TOKEN)

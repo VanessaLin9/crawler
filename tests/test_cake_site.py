@@ -302,7 +302,61 @@ class CakeSiteAdapterTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "total_pages"):
             adapter.parse_page(
                 "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
-                json.dumps({"data": [], "total_pages": "3"}),
+                json.dumps({"data": [], "total_pages": "3", "current_page": 1}),
+                "後端",
+            )
+
+    def test_parse_page_raises_when_total_pages_is_boolean(self) -> None:
+        adapter = CakeItJobsAdapter("後端")
+        with self.assertRaisesRegex(RuntimeError, "total_pages"):
+            adapter.parse_page(
+                "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                json.dumps({"data": [], "total_pages": True, "current_page": 1}),
+                "後端",
+            )
+
+    def test_parse_page_raises_when_total_pages_is_negative(self) -> None:
+        adapter = CakeItJobsAdapter("後端")
+        with self.assertRaisesRegex(RuntimeError, "total_pages"):
+            adapter.parse_page(
+                "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                json.dumps({"data": [], "total_pages": -1, "current_page": 1}),
+                "後端",
+            )
+
+    def test_parse_page_raises_when_current_page_missing(self) -> None:
+        adapter = CakeItJobsAdapter("後端")
+        with self.assertRaisesRegex(RuntimeError, "current_page"):
+            adapter.parse_page(
+                "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                json.dumps({"data": [], "total_pages": 1}),
+                "後端",
+            )
+
+    def test_parse_page_raises_when_current_page_mismatches_logical_url(self) -> None:
+        adapter = CakeItJobsAdapter("後端")
+        with self.assertRaisesRegex(RuntimeError, "current_page mismatch"):
+            adapter.parse_page(
+                "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it?page=2",
+                json.dumps({"data": [], "total_pages": 3, "current_page": 1}),
+                "後端",
+            )
+
+    def test_parse_page_raises_when_current_page_is_boolean(self) -> None:
+        adapter = CakeItJobsAdapter("後端")
+        with self.assertRaisesRegex(RuntimeError, "current_page"):
+            adapter.parse_page(
+                "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                json.dumps({"data": [], "total_pages": 1, "current_page": True}),
+                "後端",
+            )
+
+    def test_parse_page_raises_when_current_page_is_negative(self) -> None:
+        adapter = CakeItJobsAdapter("後端")
+        with self.assertRaisesRegex(RuntimeError, "current_page"):
+            adapter.parse_page(
+                "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                json.dumps({"data": [], "total_pages": 1, "current_page": -2}),
                 "後端",
             )
 

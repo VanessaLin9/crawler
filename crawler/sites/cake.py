@@ -260,7 +260,7 @@ class CakeItJobsAdapter(SiteAdapter):
         # Runtime Cake crawl is API-only: `html` is the Search API response body.
         search_terms = _expand_search_terms(keyword)
         current_page = _extract_page_number(url)
-        api_response = _parse_search_api_payload(html)
+        api_response = _parse_search_api_payload(html, expected_page=current_page)
         matches = _parse_api_job_matches(api_response, search_terms)
         links = _build_pagination_links(keyword, current_page, api_response)
         return ParsedPage(
@@ -670,7 +670,12 @@ def _fetch_search_api_response(
         raise RuntimeError(f"Cake Search API network error: {exc.reason}") from exc
 
 
-def _parse_search_api_payload(body: str) -> dict:
+def _is_json_int(value: object) -> bool:
+    # bool is a subclass of int in Python; JSON true/false must not pass.
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _parse_search_api_payload(body: str, *, expected_page: int) -> dict:
     try:
         payload = json.loads(body)
     except json.JSONDecodeError as exc:
@@ -684,9 +689,29 @@ def _parse_search_api_payload(body: str) -> dict:
     if not isinstance(payload["data"], list):
         raise RuntimeError("Cake Search API response field 'data' must be a list")
 
-    if "total_pages" not in payload or not isinstance(payload["total_pages"], int):
+    if "total_pages" not in payload:
         raise RuntimeError(
             "Cake Search API response missing integer field 'total_pages'"
+        )
+    total_pages = payload["total_pages"]
+    if not _is_json_int(total_pages) or total_pages < 0:
+        raise RuntimeError(
+            "Cake Search API response field 'total_pages' must be a non-negative integer"
+        )
+
+    if "current_page" not in payload:
+        raise RuntimeError(
+            "Cake Search API response missing integer field 'current_page'"
+        )
+    current_page = payload["current_page"]
+    if not _is_json_int(current_page) or current_page < 1:
+        raise RuntimeError(
+            "Cake Search API response field 'current_page' must be a positive integer"
+        )
+    if current_page != expected_page:
+        raise RuntimeError(
+            "Cake Search API current_page mismatch: "
+            f"expected {expected_page}, got {current_page}"
         )
 
     return payload
