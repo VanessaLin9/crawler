@@ -50,6 +50,7 @@ class SiteRunSummary:
     appended_count: int = 0
     skipped_count: int = 0
     sheet_name: str = ""
+    sheet_sync_skipped: bool = False
     sent_email: bool = False
     sent_machine_email: bool = False
     error: str = ""
@@ -465,6 +466,10 @@ def _run_site(
         # - the run is issue-only (no valid records), even without reset
         #   (avoid sync side-effects masking the crawl failure).
         if crawl_issues and (args.reset_google_sheet or not records):
+            summary.sheet_sync_skipped = True
+            summary.sheet_name = sheet_name
+            summary.appended_count = 0
+            summary.skipped_count = 0
             sync_result = SheetSyncResult(
                 appended_count=0,
                 appended_records=[],
@@ -480,9 +485,9 @@ def _run_site(
                 service_account_path=args.google_service_account,
                 reset_sheet=args.reset_google_sheet,
             )
-        summary.appended_count = sync_result.appended_count
-        summary.skipped_count = sync_result.skipped_count
-        summary.sheet_name = sync_result.sheet_name
+            summary.appended_count = sync_result.appended_count
+            summary.skipped_count = sync_result.skipped_count
+            summary.sheet_name = sync_result.sheet_name
 
         if not args.send_email_notification:
             return summary
@@ -578,7 +583,7 @@ def _format_crawl_stats_line(
     *,
     sync_google_sheet: bool,
 ) -> str:
-    if sync_google_sheet:
+    if sync_google_sheet and not summary.sheet_sync_skipped:
         sheet_skip = summary.skipped_count
         sheet_new = summary.appended_count
     else:
@@ -607,10 +612,15 @@ def _print_site_run_summary(
         return
 
     if sync_google_sheet:
-        print(
-            f"{prefix}synced {summary.appended_count} new rows to "
-            f"{summary.sheet_name}; skipped {summary.skipped_count} duplicates."
-        )
+        if summary.sheet_sync_skipped:
+            print(
+                f"{prefix}skipped Google Sheet sync because crawl issues were detected."
+            )
+        else:
+            print(
+                f"{prefix}synced {summary.appended_count} new rows to "
+                f"{summary.sheet_name}; skipped {summary.skipped_count} duplicates."
+            )
         if send_email_notification:
             if summary.sent_machine_email:
                 print(
