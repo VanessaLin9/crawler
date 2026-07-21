@@ -459,9 +459,12 @@ def _run_site(
             explicit_name=args.google_sheet_name,
             env_name=os.getenv("GOOGLE_SHEET_NAME"),
         )
-        # With crawl issues, --reset-google-sheet must not mutate the Sheet:
-        # clearing then rewriting from partial/empty records would drop existing rows.
-        if crawl_issues and args.reset_google_sheet:
+        # Skip Sheet mutation when:
+        # - reset is requested and any crawl issue exists (avoid wiping then
+        #   rewriting from partial/empty data), or
+        # - the run is issue-only (no valid records), even without reset
+        #   (avoid sync side-effects masking the crawl failure).
+        if crawl_issues and (args.reset_google_sheet or not records):
             sync_result = SheetSyncResult(
                 appended_count=0,
                 appended_records=[],
