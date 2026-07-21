@@ -459,9 +459,9 @@ def _run_site(
             explicit_name=args.google_sheet_name,
             env_name=os.getenv("GOOGLE_SHEET_NAME"),
         )
-        # Issue-only runs must not reset/sync: empty records + --reset-google-sheet
-        # would clear existing Sheet rows before any append happens.
-        if crawl_issues and not records:
+        # With crawl issues, --reset-google-sheet must not mutate the Sheet:
+        # clearing then rewriting from partial/empty records would drop existing rows.
+        if crawl_issues and args.reset_google_sheet:
             sync_result = SheetSyncResult(
                 appended_count=0,
                 appended_records=[],
