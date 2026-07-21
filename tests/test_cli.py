@@ -24,9 +24,11 @@ from crawler.cli import (
     _keyword_output_slug,
     _resolve_requested_keywords,
     _resolve_requested_sites,
+    _run_site,
     _validate_reset_google_sheet,
     _validate_runtime_args,
 )
+from crawler.google_sheets import SheetSyncResult
 
 
 class CliTests(unittest.TestCase):
@@ -78,6 +80,312 @@ class CliTests(unittest.TestCase):
                 "104 search API request failed after establishing an anonymous session. Cookie/session behavior may have changed. (page: https://www.104.com.tw/jobs/search/?keyword=%E5%BE%8C%E7%AB%AF)"
             ],
         )
+
+    @patch("crawler.cli.sync_job_records")
+    @patch("crawler.cli.crawl")
+    def test_run_site_skips_sheet_sync_for_issue_only_reset_run(
+        self,
+        mock_crawl,
+        mock_sync_job_records,
+    ) -> None:
+        mock_crawl.return_value = [
+            {
+                "site": "cake",
+                "keyword": "後端",
+                "url": "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                "error": "Cake Search API HTTP error: 403 Forbidden",
+            }
+        ]
+        args = argparse.Namespace(
+            keyword="後端",
+            max_pages=1,
+            per_page=20,
+            delay=0,
+            timeout=5,
+            output="data/results.jsonl",
+            user_agent="search-crawler/test",
+            search_url_template=None,
+            sync_google_sheet=True,
+            google_sheet_id="sheet-123",
+            google_sheet_name=None,
+            google_service_account="secrets/google-service-account.json",
+            reset_google_sheet=True,
+            send_email_notification=False,
+            send_machine_email_notification=False,
+        )
+
+        summary = _run_site(
+            args,
+            "cake",
+            multi_site=False,
+            multi_keyword=False,
+        )
+
+        mock_sync_job_records.assert_not_called()
+        self.assertTrue(summary.sheet_sync_skipped)
+        self.assertEqual(summary.records_found, 0)
+        self.assertEqual(summary.appended_count, 0)
+        self.assertEqual(summary.sheet_name, "cake_jobs")
+        self.assertEqual(len(summary.crawl_issues), 1)
+        self.assertIn("Cake Search API HTTP error: 403", summary.crawl_issues[0])
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=True,
+                send_email_notification=False,
+                show_run_prefix=False,
+                multi_keyword=False,
+            )
+        output = buffer.getvalue()
+        self.assertIn(
+            "skipped Google Sheet sync because crawl issues were detected.",
+            output,
+        )
+        self.assertNotIn("synced 0 new rows", output)
+        self.assertIn("sheet_skip=n/a sheet_new=n/a", output)
+
+    @patch("crawler.cli.sync_job_records")
+    @patch("crawler.cli.crawl")
+    def test_run_site_skips_sheet_sync_for_issue_only_without_reset(
+        self,
+        mock_crawl,
+        mock_sync_job_records,
+    ) -> None:
+        mock_crawl.return_value = [
+            {
+                "site": "cake",
+                "keyword": "後端",
+                "url": "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                "error": "Cake Search API HTTP error: 403 Forbidden",
+            }
+        ]
+        args = argparse.Namespace(
+            keyword="後端",
+            max_pages=1,
+            per_page=20,
+            delay=0,
+            timeout=5,
+            output="data/results.jsonl",
+            user_agent="search-crawler/test",
+            search_url_template=None,
+            sync_google_sheet=True,
+            google_sheet_id="sheet-123",
+            google_sheet_name=None,
+            google_service_account="secrets/google-service-account.json",
+            reset_google_sheet=False,
+            send_email_notification=False,
+            send_machine_email_notification=False,
+        )
+
+        summary = _run_site(
+            args,
+            "cake",
+            multi_site=False,
+            multi_keyword=False,
+        )
+
+        mock_sync_job_records.assert_not_called()
+        self.assertTrue(summary.sheet_sync_skipped)
+        self.assertEqual(summary.records_found, 0)
+        self.assertEqual(summary.appended_count, 0)
+        self.assertEqual(summary.sheet_name, "cake_jobs")
+        self.assertEqual(len(summary.crawl_issues), 1)
+        self.assertIn("Cake Search API HTTP error: 403", summary.crawl_issues[0])
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=True,
+                send_email_notification=False,
+                show_run_prefix=False,
+                multi_keyword=False,
+            )
+        output = buffer.getvalue()
+        self.assertIn(
+            "skipped Google Sheet sync because crawl issues were detected.",
+            output,
+        )
+        self.assertNotIn("synced 0 new rows", output)
+        self.assertIn("sheet_skip=n/a sheet_new=n/a", output)
+
+    @patch("crawler.cli.sync_job_records")
+    @patch("crawler.cli.crawl")
+    def test_run_site_skips_sheet_sync_for_partial_records_with_reset(
+        self,
+        mock_crawl,
+        mock_sync_job_records,
+    ) -> None:
+        mock_crawl.return_value = [
+            {
+                "site": "cake",
+                "keyword": "後端",
+                "url": "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                "status_code": 200,
+                "matches": [
+                    {
+                        "type": "job_card",
+                        "title": "Backend Engineer",
+                        "company_name": "ACME",
+                        "job_url": "https://www.cake.me/companies/acme/jobs/backend-engineer",
+                        "company_url": "https://www.cake.me/companies/acme",
+                        "summary": "Build APIs",
+                        "matched_fields": ["title"],
+                        "matched_terms": ["backend"],
+                    }
+                ],
+                "links": [
+                    "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it?page=2",
+                ],
+            },
+            {
+                "site": "cake",
+                "keyword": "後端",
+                "url": "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it?page=2",
+                "error": "Cake Search API HTTP error: 500 Internal Server Error",
+            },
+        ]
+        args = argparse.Namespace(
+            keyword="後端",
+            max_pages=2,
+            per_page=20,
+            delay=0,
+            timeout=5,
+            output="data/results.jsonl",
+            user_agent="search-crawler/test",
+            search_url_template=None,
+            sync_google_sheet=True,
+            google_sheet_id="sheet-123",
+            google_sheet_name=None,
+            google_service_account="secrets/google-service-account.json",
+            reset_google_sheet=True,
+            send_email_notification=False,
+            send_machine_email_notification=False,
+        )
+
+        summary = _run_site(
+            args,
+            "cake",
+            multi_site=False,
+            multi_keyword=False,
+        )
+
+        mock_sync_job_records.assert_not_called()
+        self.assertTrue(summary.sheet_sync_skipped)
+        self.assertEqual(summary.records_found, 1)
+        self.assertEqual(summary.appended_count, 0)
+        self.assertEqual(summary.sheet_name, "cake_jobs")
+        self.assertEqual(len(summary.crawl_issues), 1)
+        self.assertIn("Cake Search API HTTP error: 500", summary.crawl_issues[0])
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=True,
+                send_email_notification=False,
+                show_run_prefix=False,
+                multi_keyword=False,
+            )
+        output = buffer.getvalue()
+        self.assertIn(
+            "skipped Google Sheet sync because crawl issues were detected.",
+            output,
+        )
+        self.assertNotIn("synced 0 new rows", output)
+        self.assertIn("sheet_skip=n/a sheet_new=n/a", output)
+
+    @patch("crawler.cli.sync_job_records")
+    @patch("crawler.cli.crawl")
+    def test_run_site_syncs_partial_records_without_reset(
+        self,
+        mock_crawl,
+        mock_sync_job_records,
+    ) -> None:
+        mock_crawl.return_value = [
+            {
+                "site": "cake",
+                "keyword": "後端",
+                "url": "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+                "status_code": 200,
+                "matches": [
+                    {
+                        "type": "job_card",
+                        "title": "Backend Engineer",
+                        "company_name": "ACME",
+                        "job_url": "https://www.cake.me/companies/acme/jobs/backend-engineer",
+                        "company_url": "https://www.cake.me/companies/acme",
+                        "summary": "Build APIs",
+                        "matched_fields": ["title"],
+                        "matched_terms": ["backend"],
+                    }
+                ],
+                "links": [],
+            },
+            {
+                "site": "cake",
+                "keyword": "後端",
+                "url": "https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it?page=2",
+                "error": "Cake Search API request timed out",
+            },
+        ]
+        mock_sync_job_records.return_value = SheetSyncResult(
+            appended_count=1,
+            appended_records=[],
+            skipped_count=0,
+            sheet_name="cake_jobs",
+            spreadsheet_id="sheet-123",
+        )
+        args = argparse.Namespace(
+            keyword="後端",
+            max_pages=2,
+            per_page=20,
+            delay=0,
+            timeout=5,
+            output="data/results.jsonl",
+            user_agent="search-crawler/test",
+            search_url_template=None,
+            sync_google_sheet=True,
+            google_sheet_id="sheet-123",
+            google_sheet_name=None,
+            google_service_account="secrets/google-service-account.json",
+            reset_google_sheet=False,
+            send_email_notification=False,
+            send_machine_email_notification=False,
+        )
+
+        summary = _run_site(
+            args,
+            "cake",
+            multi_site=False,
+            multi_keyword=False,
+        )
+
+        mock_sync_job_records.assert_called_once()
+        self.assertFalse(mock_sync_job_records.call_args.kwargs["reset_sheet"])
+        self.assertFalse(summary.sheet_sync_skipped)
+        self.assertEqual(summary.records_found, 1)
+        self.assertEqual(summary.appended_count, 1)
+        self.assertEqual(len(summary.crawl_issues), 1)
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=True,
+                send_email_notification=False,
+                show_run_prefix=False,
+                multi_keyword=False,
+            )
+        output = buffer.getvalue()
+        self.assertIn("synced 1 new rows to cake_jobs", output)
+        self.assertNotIn(
+            "skipped Google Sheet sync because crawl issues were detected.",
+            output,
+        )
+        self.assertIn("sheet_skip=0 sheet_new=1", output)
 
     def test_list_cli_sites_includes_all_mode(self) -> None:
         self.assertEqual(_list_cli_sites()[0], ALL_SITES_TOKEN)
@@ -466,6 +774,52 @@ class CliTests(unittest.TestCase):
             "[crawl-stats] site=104 keyword=全端 pages=5 found=42 "
             "sheet_skip=n/a sheet_new=n/a",
         )
+
+    def test_format_crawl_stats_line_skipped_sync_uses_n_a(self) -> None:
+        summary = SiteRunSummary(
+            site="cake",
+            keyword="後端",
+            output_path="data/results.jsonl",
+            crawled_pages=1,
+            records_found=0,
+            sheet_sync_skipped=True,
+            crawl_issues=["Cake Search API HTTP error: 403 Forbidden"],
+        )
+        self.assertEqual(
+            _format_crawl_stats_line(summary, sync_google_sheet=True),
+            "[crawl-stats] site=cake keyword=後端 pages=1 found=0 "
+            "sheet_skip=n/a sheet_new=n/a",
+        )
+
+    def test_print_site_run_summary_skipped_sync_explains_reason(self) -> None:
+        summary = SiteRunSummary(
+            site="cake",
+            keyword="後端",
+            output_path="data/results.jsonl",
+            crawled_pages=1,
+            records_found=0,
+            sheet_name="cake_jobs",
+            sheet_sync_skipped=True,
+            crawl_issues=["Cake Search API HTTP error: 403 Forbidden"],
+        )
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            _print_site_run_summary(
+                summary,
+                sync_google_sheet=True,
+                send_email_notification=False,
+                show_run_prefix=False,
+                multi_keyword=False,
+            )
+
+        output = buffer.getvalue()
+        self.assertEqual(
+            output,
+            "skipped Google Sheet sync because crawl issues were detected.\n"
+            "[crawl-stats] site=cake keyword=後端 pages=1 found=0 "
+            "sheet_skip=n/a sheet_new=n/a\n",
+        )
+        self.assertNotIn("synced 0 new rows", output)
 
     def test_print_site_run_summary_sync_mode_includes_crawl_stats(self) -> None:
         summary = SiteRunSummary(

@@ -22,7 +22,7 @@ class SiteRegistryTests(unittest.TestCase):
         adapter = build_site_adapter(config)
         self.assertEqual(adapter.name, "cake")
         self.assertEqual(adapter.per_page, 20)
-        self.assertTrue(adapter.use_search_api)
+        self.assertEqual(adapter.keyword, "python")
 
     def test_build_site_adapter_returns_104_adapter(self) -> None:
         config = CrawlConfig(site="104", keyword="python")

@@ -315,7 +315,7 @@ class WwrFailurePathTests(unittest.TestCase):
 
     @patch("crawler.core.spider.write_results")
     @patch("crawler.core.spider.time.sleep")
-    @patch("crawler.core.spider.fetch_html")
+    @patch("crawler.sites.base.fetch_html")
     def test_crawl_keeps_valid_ai_feed_when_other_feed_is_malformed(
         self,
         mock_fetch_html,
@@ -354,7 +354,7 @@ class WwrFailurePathTests(unittest.TestCase):
 
     @patch("crawler.core.spider.write_results")
     @patch("crawler.core.spider.time.sleep")
-    @patch("crawler.core.spider.fetch_html")
+    @patch("crawler.sites.base.fetch_html")
     def test_crawl_records_fetch_error_for_failed_ai_feed(
         self,
         mock_fetch_html,

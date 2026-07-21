@@ -4,10 +4,11 @@ import json
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
-from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qs, quote, urlparse
+from urllib.request import Request, urlopen
 
-from crawler.parser import parse_html_document
+from crawler.core.fetcher import FetchResponse, FetchSession
 from crawler.settings import DEFAULT_PER_PAGE
 from crawler.sites.base import ParsedPage, SiteAdapter
 from crawler.url_utils import normalize_url
@@ -224,12 +225,10 @@ class CakeItJobsAdapter(SiteAdapter):
         self,
         keyword: str = "",
         per_page: int = DEFAULT_PER_PAGE,
-        use_search_api: bool = False,
     ) -> None:
         encoded_keyword = quote(keyword.strip(), safe="")
         self.keyword = keyword.strip()
         self.per_page = per_page
-        self.use_search_api = use_search_api
         self.search_path = (
             f"/jobs/{encoded_keyword}/for-it" if encoded_keyword else "/jobs/for-it"
         )
@@ -243,43 +242,31 @@ class CakeItJobsAdapter(SiteAdapter):
     def get_allowed_domains(self) -> set[str]:
         return {"www.cake.me", "cake.me"}
 
+    def fetch_page(
+        self,
+        session: FetchSession,
+        url: str,
+        timeout: float,
+    ) -> FetchResponse:
+        return _fetch_search_api_response(
+            keyword=self.keyword,
+            page_number=_extract_page_number(url),
+            per_page=self.per_page,
+            user_agent=session.user_agent,
+            timeout=timeout,
+        )
+
     def parse_page(self, url: str, html: str, keyword: str) -> ParsedPage:
-        document = parse_html_document(url, html)
+        # Runtime Cake crawl is API-only: `html` is the Search API response body.
         search_terms = _expand_search_terms(keyword)
         current_page = _extract_page_number(url)
-        api_response = (
-            _fetch_search_api_page(keyword, current_page, self.per_page)
-            if self.use_search_api
-            else None
-        )
-        links = list(document.links)
-
-        if api_response:
-            matches = _parse_api_job_matches(api_response, search_terms)
-            links.extend(
-                _build_pagination_links(
-                    keyword,
-                    current_page,
-                    api_response,
-                )
-            )
-        else:
-            matches = _parse_structured_job_matches(url, html, search_terms)
-
-        if not matches:
-            parser = _CakeJobCardParser(base_url=url)
-            parser.feed(html)
-            parser.close()
-            matches = [
-                _job_to_match(job, keyword, search_terms)
-                for job in parser.jobs
-                if _job_matches_keyword(job, search_terms)
-            ]
-
+        api_response = _parse_search_api_payload(html, expected_page=current_page)
+        matches = _parse_api_job_matches(api_response, search_terms)
+        links = _build_pagination_links(keyword, current_page, api_response)
         return ParsedPage(
-            title=document.title,
-            meta_description=document.meta_description,
-            links=_dedupe_preserve_order(links),
+            title="",
+            meta_description="",
+            links=links,
             matches=matches,
         )
 
@@ -297,6 +284,23 @@ class CakeItJobsAdapter(SiteAdapter):
 
         page_values = query.get("page", [])
         return len(page_values) == 1 and page_values[0].isdigit()
+
+
+def _parse_legacy_html_matches(url: str, html: str, keyword: str) -> list[dict]:
+    """Legacy HTML helpers only — not used by Cake runtime crawl path."""
+    search_terms = _expand_search_terms(keyword)
+    matches = _parse_structured_job_matches(url, html, search_terms)
+    if matches:
+        return matches
+
+    parser = _CakeJobCardParser(base_url=url)
+    parser.feed(html)
+    parser.close()
+    return [
+        _job_to_match(job, keyword, search_terms)
+        for job in parser.jobs
+        if _job_matches_keyword(job, search_terms)
+    ]
 
 
 def _job_matches_keyword(job: _CakeJobCard, search_terms: list[str]) -> bool:
@@ -413,7 +417,7 @@ def _parse_api_job_matches(
     search_terms: list[str],
 ) -> list[dict]:
     matches: list[dict] = []
-    for entity in response.get("data", []):
+    for entity in response["data"]:
         if not _structured_entity_matches(entity, search_terms):
             continue
         matches.append(_structured_entity_to_match(entity, search_terms))
@@ -621,11 +625,13 @@ def _format_salary_display(
     return " ".join(part for part in parts if part)
 
 
-def _fetch_search_api_page(
+def _fetch_search_api_response(
     keyword: str,
     page_number: int,
     per_page: int,
-) -> dict | None:
+    user_agent: str,
+    timeout: float,
+) -> FetchResponse:
     request_body = json.dumps(
         {
             "query": keyword.strip(),
@@ -644,27 +650,75 @@ def _fetch_search_api_page(
             "Content-Type": "application/json",
             "Origin": "https://www.cake.me",
             "Referer": _build_search_page_url(keyword, page_number),
-            "User-Agent": "search-crawler/0.1",
+            "User-Agent": user_agent,
         },
         method="POST",
     )
     try:
-        with urlopen(request, timeout=15) as response:
+        with urlopen(request, timeout=timeout) as response:
             charset = response.headers.get_content_charset() or "utf-8"
-            payload = response.read().decode(charset, errors="replace")
-    except Exception:
-        return None
+            body = response.read().decode(charset, errors="replace")
+            return FetchResponse(status_code=response.getcode(), text=body)
+    except HTTPError as exc:
+        code = exc.code
+        reason = exc.reason
+        exc.close()
+        raise RuntimeError(f"Cake Search API HTTP error: {code} {reason}") from None
+    except TimeoutError as exc:
+        raise RuntimeError("Cake Search API request timed out") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Cake Search API network error: {exc.reason}") from exc
 
+
+def _is_json_int(value: object) -> bool:
+    # bool is a subclass of int in Python; JSON true/false must not pass.
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _parse_search_api_payload(body: str, *, expected_page: int) -> dict:
     try:
-        return json.loads(payload)
-    except json.JSONDecodeError:
-        return None
+        payload = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Cake Search API returned invalid JSON") from exc
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Cake Search API response must be a JSON object")
+
+    if "data" not in payload:
+        raise RuntimeError("Cake Search API response missing field 'data'")
+    if not isinstance(payload["data"], list):
+        raise RuntimeError("Cake Search API response field 'data' must be a list")
+
+    if "total_pages" not in payload:
+        raise RuntimeError(
+            "Cake Search API response missing integer field 'total_pages'"
+        )
+    total_pages = payload["total_pages"]
+    if not _is_json_int(total_pages) or total_pages < 0:
+        raise RuntimeError(
+            "Cake Search API response field 'total_pages' must be a non-negative integer"
+        )
+
+    if "current_page" not in payload:
+        raise RuntimeError(
+            "Cake Search API response missing integer field 'current_page'"
+        )
+    current_page = payload["current_page"]
+    if not _is_json_int(current_page) or current_page < 1:
+        raise RuntimeError(
+            "Cake Search API response field 'current_page' must be a positive integer"
+        )
+    if current_page != expected_page:
+        raise RuntimeError(
+            "Cake Search API current_page mismatch: "
+            f"expected {expected_page}, got {current_page}"
+        )
+
+    return payload
 
 
 def _build_pagination_links(keyword: str, current_page: int, response: dict) -> list[str]:
-    total_pages = response.get("total_pages")
-    if not isinstance(total_pages, int):
-        return []
+    total_pages = response["total_pages"]
     if current_page >= total_pages:
         return []
     return [_build_search_page_url(keyword, current_page + 1)]
