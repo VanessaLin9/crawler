@@ -138,6 +138,8 @@ def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> bool:
     if header == SHEET_COLUMNS:
         return False
 
+    # 僅在 header 精確等於 V24 時升級（PR #11）：只改第 1 列、不清空資料列、不 backfill。
+    # 其他變形 header 寧願失敗，避免默默對錯欄位。
     if header == LEGACY_SHEET_COLUMNS_V24:
         _update_values(
             service,

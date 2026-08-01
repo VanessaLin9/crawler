@@ -245,6 +245,7 @@ def _parse_rss_item(item: ET.Element, *, keyword_group: str) -> dict | None:
         "employment_type": _child_text(item, "type"),
         "tags": _build_tags(category, skills),
         "summary": summary,
+        # Posted on ← pubDate；Apply before ← expires_at（RSS 已提供，不另爬 HTML）。PR #11
         "content_updated_at": _parse_rss_date(_child_text(item, "pubDate")),
         "application_deadline": _parse_rss_date(_child_text(item, "expires_at")),
         "matched_fields": matched_fields,
@@ -292,8 +293,8 @@ def _build_location(region: str, state: str, country: str) -> str:
 
 
 def _build_tags(category: str, skills: str) -> str:
-    # WWR tags contract: Category first, then non-empty Skills.
-    # Trim, skip empties, preserve source order, and drop exact duplicate values.
+    # WWR tags 契約（PR #11 對齊 mapping task）：Category 在前，非空 Skills 在後。
+    # Trim、跳過空值、保留來源順序、去掉完全重複值；薪資不進 tags。
     tags: list[str] = []
     for value in (category, skills):
         normalized = value.strip()
@@ -321,6 +322,7 @@ def _extract_company_url(description_html: str) -> str:
 
 
 def _parse_rss_date(raw_value: str) -> str:
+    # pubDate / expires_at 共用：輸出 YYYY-MM-DD；解析失敗回空字串（fail-open）。PR #11
     raw_value = raw_value.strip()
     if not raw_value:
         return ""
