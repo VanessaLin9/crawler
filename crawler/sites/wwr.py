@@ -246,6 +246,7 @@ def _parse_rss_item(item: ET.Element, *, keyword_group: str) -> dict | None:
         "tags": _build_tags(category, skills),
         "summary": summary,
         "content_updated_at": _parse_pub_date(_child_text(item, "pubDate")),
+        "application_deadline": _parse_pub_date(_child_text(item, "expires_at")),
         "matched_fields": matched_fields,
         "matched_terms": matched_terms,
         "salary_min": "",
@@ -291,6 +292,8 @@ def _build_location(region: str, state: str, country: str) -> str:
 
 
 def _build_tags(category: str, skills: str) -> str:
+    # WWR tags contract: Category first, then non-empty Skills.
+    # Trim, skip empties, preserve source order, and drop exact duplicate values.
     tags: list[str] = []
     for value in (category, skills):
         normalized = value.strip()

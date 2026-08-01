@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 
-SHEET_COLUMNS = [
+# Exact pre-application_deadline schema. Used only for safe Sheet header upgrades.
+LEGACY_SHEET_COLUMNS_V24 = [
     "job_url",
     "title",
     "company_name",
@@ -29,6 +30,11 @@ SHEET_COLUMNS = [
     "search_page_url",
     "content_updated_at",
     "discovered_at",
+]
+
+SHEET_COLUMNS = [
+    *LEGACY_SHEET_COLUMNS_V24,
+    "application_deadline",
 ]
 
 
@@ -58,6 +64,7 @@ class JobRecord:
     search_page_url: str
     content_updated_at: str
     discovered_at: str
+    application_deadline: str = ""
 
     def to_sheet_row(self) -> list[str]:
         return [
@@ -85,6 +92,7 @@ class JobRecord:
             self.search_page_url,
             self.content_updated_at,
             self.discovered_at,
+            self.application_deadline,
         ]
 
 
@@ -143,6 +151,7 @@ def flatten_job_records(
                 search_page_url=search_page_url,
                 content_updated_at=match.get("content_updated_at", ""),
                 discovered_at=discovered_value,
+                application_deadline=match.get("application_deadline", ""),
             )
 
     return list(deduped.values())

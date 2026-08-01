@@ -24,6 +24,7 @@ from crawler.sites.wwr import (
     WWR_FRONT_END_FEED,
     WWR_FULL_STACK_FEED,
     WwrJobsAdapter,
+    _build_tags,
     _find_matching_terms,
     parse_rss_feed,
     resolve_feed_urls,
@@ -112,7 +113,7 @@ class WwrAdapterSkeletonTests(unittest.TestCase):
             BACKEND_SAMPLE_RSS,
             "後端",
         )
-        self.assertEqual(len(parsed.matches), 3)
+        self.assertEqual(len(parsed.matches), 5)
         self.assertEqual(parsed.links, [])
 
 
@@ -134,6 +135,7 @@ class WwrRssMappingTests(unittest.TestCase):
         )
         self.assertEqual(first["employment_type"], "Full-Time")
         self.assertEqual(first["content_updated_at"], "2026-06-18")
+        self.assertEqual(first["application_deadline"], "2026-07-18")
         self.assertEqual(first["matched_fields"], ["category"])
         self.assertEqual(first["matched_terms"], ["Back-End Programming"])
 
@@ -174,11 +176,45 @@ class WwrRssMappingTests(unittest.TestCase):
         self.assertEqual(matches[1]["content_updated_at"], "")
         self.assertEqual(matches[2]["content_updated_at"], "2026-06-19")
 
+    def test_parse_rss_feed_maps_expires_at_to_application_deadline(self) -> None:
+        matches = parse_rss_feed(BACKEND_SAMPLE_RSS, "後端")
+        self.assertEqual(matches[0]["application_deadline"], "2026-07-18")
+        self.assertEqual(matches[1]["application_deadline"], "")  # blank expires_at
+        self.assertEqual(matches[2]["application_deadline"], "")  # malformed
+        self.assertEqual(matches[3]["application_deadline"], "2026-07-20")
+        self.assertEqual(matches[4]["application_deadline"], "")  # missing element
+
+    def test_parse_rss_feed_malformed_deadline_does_not_drop_other_items(self) -> None:
+        matches = parse_rss_feed(BACKEND_SAMPLE_RSS, "後端")
+        titles = [match["title"] for match in matches]
+        self.assertIn("Platform Engineer", titles)
+        self.assertIn("API Engineer", titles)
+
+    def test_tags_contract_category_first_skills_second(self) -> None:
+        matches = parse_rss_feed(BACKEND_SAMPLE_RSS, "後端")
+        by_title = {match["title"]: match["tags"] for match in matches}
+
+        self.assertEqual(
+            by_title["Senior Backend Engineer"],
+            "Back-End Programming, Ruby, Rails, PostgreSQL",
+        )
+        self.assertEqual(by_title["API Engineer"], "Back-End Programming")
+        self.assertEqual(by_title["Worker"], "Back-End Programming")
+        self.assertEqual(_build_tags("", "Python, Go"), "Python, Go")
+        self.assertEqual(_build_tags("  Backend  ", "  Backend  "), "Backend")
+        self.assertEqual(_build_tags("Backend", ""), "Backend")
+
     def test_parse_rss_feed_preserves_item_order(self) -> None:
         matches = parse_rss_feed(BACKEND_SAMPLE_RSS, "後端")
         self.assertEqual(
             [match["title"] for match in matches],
-            ["Senior Backend Engineer", "Solo Founder Role", "Platform Engineer"],
+            [
+                "Senior Backend Engineer",
+                "Solo Founder Role",
+                "Platform Engineer",
+                "API Engineer",
+                "Worker",
+            ],
         )
 
     def test_ai_keyword_group_filters_items_by_title_skills_and_description(self) -> None:
@@ -271,9 +307,10 @@ class WwrRssMappingTests(unittest.TestCase):
             ],
             discovered_at="2026-06-27T00:00:00+00:00",
         )
-        self.assertEqual(len(records), 3)
+        self.assertEqual(len(records), 5)
         self.assertEqual(records[0].source_site, "wwr")
         self.assertEqual(records[0].search_page_url, WWR_BACKEND_FEED)
+        self.assertEqual(records[0].application_deadline, "2026-07-18")
 
 
 class WwrRegistryIntegrationTests(unittest.TestCase):

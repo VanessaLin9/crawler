@@ -153,6 +153,13 @@ crawl-site wwr "AI" --sync-google-sheet
 
 `AI` keyword 會同時讀 Backend 與 Full-Stack RSS，並在 item 層做 AI 相關過濾；其他 category keyword 則直接使用對應 category feed。
 
+欄位對應重點：
+
+- Posted on → `content_updated_at`（`YYYY-MM-DD`）
+- Apply before → `application_deadline`（來自 RSS `expires_at`，`YYYY-MM-DD`）
+- `tags` = Category + 非空 Skills（Category 在前；Skills 稀疏是 WWR 來源資料現實）
+- 仍是 RSS-only、manual-only，不抓詳情頁
+
 ### 爬完後同步到 Google Sheet
 
 ```bash
@@ -497,9 +504,13 @@ crawl-site cake "後端" --sync-google-sheet --send-email-notification
 
 - [We Work Remotely RSS Feed](https://weworkremotely.com/remote-job-rss-feed)
 
-目前預設會把結果寫到 `wwr_jobs` worksheet，欄位仍沿用共同的 24 欄 schema。
+目前預設會把結果寫到 `wwr_jobs` worksheet，欄位沿用共同 schema（含 `application_deadline`）。
 
 備註：
+
+- Posted on → `content_updated_at`
+- Apply before → `application_deadline`（RSS `expires_at`）
+- `tags` = Category + 非空 Skills；Skills 稀疏屬來源資料現實
 
 - 目前只支援手動 CLI，不在 `all` 模式或 GitHub Actions 排程內
 - category keyword（後端 / 全端 / 前端）直接使用對應 RSS feed

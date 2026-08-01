@@ -135,6 +135,7 @@ class EmailerTests(unittest.TestCase):
         )
         self.assertEqual(payload["jobs"][0]["title"], "Backend Engineer")
         self.assertEqual(payload["jobs"][0]["job_url"], "https://www.cake.me/jobs/1")
+        self.assertEqual(payload["jobs"][0]["application_deadline"], "")
 
 
 if __name__ == "__main__":

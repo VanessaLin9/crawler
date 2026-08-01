@@ -14,6 +14,7 @@
       <type>Full-Time</type>
       <description>&lt;p&gt;&lt;strong&gt;Headquarters:&lt;/strong&gt; Remote&lt;br /&gt;&lt;strong&gt;URL:&lt;/strong&gt; &lt;a href=&quot;https://acme.example&quot;&gt;https://acme.example&lt;/a&gt;&lt;/p&gt;&lt;p&gt;Build &amp;amp; scale APIs.&lt;/p&gt;</description>
       <pubDate>Thu, 18 Jun 2026 02:19:12 +0000</pubDate>
+      <expires_at>Sat, 18 Jul 2026 02:19:12 +0000</expires_at>
     </item>
     <item>
       <title>Solo Founder Role</title>
@@ -26,6 +27,7 @@
       <type>Contract</type>
       <description>&lt;p&gt;No company URL here.&lt;/p&gt;</description>
       <pubDate>not-a-date</pubDate>
+      <expires_at></expires_at>
     </item>
     <item>
       <title>Missing URL Job</title>
@@ -41,6 +43,28 @@
       <type>Full-Time</type>
       <description>&lt;p&gt;Guid fallback.&lt;/p&gt;</description>
       <pubDate>Fri, 19 Jun 2026 10:00:00 +0000</pubDate>
+      <expires_at>not-a-deadline</expires_at>
+    </item>
+    <item>
+      <title>No Skills Corp: API Engineer</title>
+      <link>https://weworkremotely.com/remote-jobs/no-skills-corp-api-engineer</link>
+      <region>Anywhere in the World</region>
+      <skills></skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Category only tags.&lt;/p&gt;</description>
+      <pubDate>Sat, 20 Jun 2026 10:00:00 +0000</pubDate>
+      <expires_at>Mon, 20 Jul 2026 10:00:00 +0000</expires_at>
+    </item>
+    <item>
+      <title>Duplicate Tag Corp: Worker</title>
+      <link>https://weworkremotely.com/remote-jobs/duplicate-tag-corp-worker</link>
+      <region>Anywhere in the World</region>
+      <skills>Back-End Programming</skills>
+      <category>Back-End Programming</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Exact duplicate category/skills.&lt;/p&gt;</description>
+      <pubDate>Sun, 21 Jun 2026 10:00:00 +0000</pubDate>
     </item>
   </channel>
 </rss>
