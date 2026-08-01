@@ -124,6 +124,13 @@ crawl-site wwr "AI" --sync-google-sheet
 
 The `AI` keyword reads both Backend and Full-Stack RSS feeds and applies item-level AI filtering. Other category keywords use their category feed directly.
 
+Field mapping notes:
+
+- Posted on → `content_updated_at` (`YYYY-MM-DD`)
+- Apply before → `application_deadline` (from RSS `expires_at`, `YYYY-MM-DD`)
+- `tags` = Category + non-empty Skills (Category first; sparse Skills is a WWR source-data reality)
+- still RSS-only and manual-only; no job detail page scraping
+
 ### Crawl and sync to Google Sheets
 
 ```bash
@@ -299,11 +306,13 @@ Source:
 
 - [We Work Remotely RSS Feed](https://weworkremotely.com/remote-job-rss-feed)
 
-Results sync to the shared 24-column schema in `wwr_jobs`.
+Results sync to the shared schema in `wwr_jobs` (including `application_deadline`).
 
 Notes:
 
 - manual CLI only; not in `all` mode or GitHub Actions schedule yet
+- Posted on → `content_updated_at`; Apply before → `application_deadline`
+- `tags` = Category + non-empty Skills; sparse Skills is expected from WWR RSS
 - category keywords map directly to category RSS feeds
 - the `AI` keyword reads Backend + Full-Stack feeds and applies item-level AI filtering
 - unsupported keywords fail closed instead of falling back to another feed

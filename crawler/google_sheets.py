@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from crawler.records import JobRecord, SHEET_COLUMNS
+from crawler.records import LEGACY_SHEET_COLUMNS_V24, JobRecord, SHEET_COLUMNS
 
 
 DEFAULT_GOOGLE_SERVICE_ACCOUNT = "secrets/google-service-account.json"
@@ -17,6 +17,7 @@ class SheetSyncResult:
     skipped_count: int
     sheet_name: str
     spreadsheet_id: str
+    header_upgraded_from_legacy: bool = False
 
 
 def sync_job_records(
@@ -30,7 +31,12 @@ def sync_job_records(
     _ensure_sheet_exists(service, spreadsheet_id, sheet_name)
     if reset_sheet:
         _clear_sheet(service, spreadsheet_id, sheet_name)
-    _ensure_header_row(service, spreadsheet_id, sheet_name)
+    header_upgraded = _ensure_header_row(service, spreadsheet_id, sheet_name)
+    if header_upgraded:
+        print(
+            f"Google Sheet '{sheet_name}' header upgraded from 24 to "
+            f"{len(SHEET_COLUMNS)} columns; existing rows were kept."
+        )
     existing_urls = _fetch_existing_job_urls(service, spreadsheet_id, sheet_name)
 
     appended_records = [
@@ -48,6 +54,7 @@ def sync_job_records(
         skipped_count=len(records) - len(rows_to_append),
         sheet_name=sheet_name,
         spreadsheet_id=spreadsheet_id,
+        header_upgraded_from_legacy=header_upgraded,
     )
 
 
@@ -107,7 +114,7 @@ def _ensure_sheet_exists(service, spreadsheet_id: str, sheet_name: str) -> None:
     )
 
 
-def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> None:
+def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> bool:
     response = (
         service.spreadsheets()
         .values()
@@ -125,11 +132,22 @@ def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> None:
             f"{sheet_name}!1:1",
             [SHEET_COLUMNS],
         )
-        return
+        return False
 
     header = values[0]
     if header == SHEET_COLUMNS:
-        return
+        return False
+
+    # 僅在 header 精確等於 V24 時升級（PR #11）：只改第 1 列、不清空資料列、不 backfill。
+    # 其他變形 header 寧願失敗，避免默默對錯欄位。
+    if header == LEGACY_SHEET_COLUMNS_V24:
+        _update_values(
+            service,
+            spreadsheet_id,
+            f"{sheet_name}!1:1",
+            [SHEET_COLUMNS],
+        )
+        return True
 
     if "job_url" not in header:
         raise ValueError(
@@ -138,8 +156,9 @@ def _ensure_header_row(service, spreadsheet_id: str, sheet_name: str) -> None:
         )
 
     raise ValueError(
-        f"Sheet '{sheet_name}' header does not match the current schema. "
-        "Use --reset-google-sheet once to rebuild the worksheet with the new columns."
+        f"Sheet '{sheet_name}' header does not match the current schema or the "
+        f"supported legacy 24-column schema. Current schema ends with "
+        f"'application_deadline'; unsupported header: {header}."
     )
 
 

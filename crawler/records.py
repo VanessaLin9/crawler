@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 
-SHEET_COLUMNS = [
+# 精確的 24 欄舊 schema（PR #11）：只給 Sheet header 安全升級比對用。
+# 不可任意改動欄位順序／名稱，否則既有 worksheet 會無法自動升級而必須 reset。
+LEGACY_SHEET_COLUMNS_V24 = [
     "job_url",
     "title",
     "company_name",
@@ -29,6 +31,13 @@ SHEET_COLUMNS = [
     "search_page_url",
     "content_updated_at",
     "discovered_at",
+]
+
+# 現行 schema = V24 + application_deadline（第 25 欄；PR #11）。
+# 新增欄位一律 append 在尾端，並同步更新 google_sheets 的 legacy 升級路徑。
+SHEET_COLUMNS = [
+    *LEGACY_SHEET_COLUMNS_V24,
+    "application_deadline",
 ]
 
 
@@ -58,6 +67,8 @@ class JobRecord:
     search_page_url: str
     content_updated_at: str
     discovered_at: str
+    # Apply before；來源因站而異（WWR 為 RSS expires_at）。PR #11
+    application_deadline: str = ""
 
     def to_sheet_row(self) -> list[str]:
         return [
@@ -85,6 +96,7 @@ class JobRecord:
             self.search_page_url,
             self.content_updated_at,
             self.discovered_at,
+            self.application_deadline,
         ]
 
 
@@ -143,6 +155,7 @@ def flatten_job_records(
                 search_page_url=search_page_url,
                 content_updated_at=match.get("content_updated_at", ""),
                 discovered_at=discovered_value,
+                application_deadline=match.get("application_deadline", ""),
             )
 
     return list(deduped.values())

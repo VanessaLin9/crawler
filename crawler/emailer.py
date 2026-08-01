@@ -130,6 +130,9 @@ def _build_plain_text_body(
                 f"Type: {record.employment_type or 'N/A'}",
                 f"Seniority: {record.seniority_level or 'N/A'}",
                 f"Experience: {record.experience_required_years or 'N/A'}",
+                # 共用人讀摘要也露出日期欄（WWR 等站需要；無值則 N/A）。PR #11
+                f"Posted on: {record.content_updated_at or 'N/A'}",
+                f"Apply before: {record.application_deadline or 'N/A'}",
                 f"URL: {record.job_url}",
                 "",
             ]
