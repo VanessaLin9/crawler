@@ -63,8 +63,50 @@ class EmailerTests(unittest.TestCase):
         self.assertIn("Backend Engineer", body)
         self.assertIn("Company: ACME", body)
         self.assertIn("Salary: 100000 - 150000 TWD per_month", body)
+        self.assertIn("Posted on: 2026-03-22T12:00:00Z", body)
+        self.assertIn("Apply before: N/A", body)
         self.assertIn("Worksheet: cake_jobs", body)
         self.assertIn("https://docs.google.com/spreadsheets/d/sheet123/edit", body)
+
+    def test_build_plain_text_body_includes_posted_on_and_apply_before(self) -> None:
+        body = _build_plain_text_body(
+            site="wwr",
+            keyword="後端",
+            records=[
+                JobRecord(
+                    job_url="https://weworkremotely.com/remote-jobs/1",
+                    title="Senior Backend Engineer",
+                    company_name="Acme",
+                    company_url="",
+                    keyword="後端",
+                    location="Anywhere in the World",
+                    salary_min="",
+                    salary_max="",
+                    salary_currency="",
+                    salary_type="",
+                    salary_display="",
+                    openings_count="",
+                    employment_type="Full-Time",
+                    seniority_level="",
+                    experience_required_years="",
+                    management_responsibility="",
+                    tags="Back-End Programming",
+                    matched_fields=["category"],
+                    matched_terms=["Back-End Programming"],
+                    summary="Build APIs",
+                    source_site="wwr",
+                    search_page_url="https://weworkremotely.com/categories/remote-back-end-programming-jobs.rss",
+                    content_updated_at="2026-07-24",
+                    discovered_at="2026-08-02T00:00:00+00:00",
+                    application_deadline="2026-08-23",
+                )
+            ],
+            sheet_name="wwr_jobs",
+            spreadsheet_id="sheet123",
+        )
+
+        self.assertIn("Posted on: 2026-07-24", body)
+        self.assertIn("Apply before: 2026-08-23", body)
 
     def test_build_plain_text_body_lists_crawl_issues(self) -> None:
         body = _build_plain_text_body(

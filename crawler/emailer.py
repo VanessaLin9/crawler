@@ -130,6 +130,8 @@ def _build_plain_text_body(
                 f"Type: {record.employment_type or 'N/A'}",
                 f"Seniority: {record.seniority_level or 'N/A'}",
                 f"Experience: {record.experience_required_years or 'N/A'}",
+                f"Posted on: {record.content_updated_at or 'N/A'}",
+                f"Apply before: {record.application_deadline or 'N/A'}",
                 f"URL: {record.job_url}",
                 "",
             ]
