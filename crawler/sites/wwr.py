@@ -245,8 +245,8 @@ def _parse_rss_item(item: ET.Element, *, keyword_group: str) -> dict | None:
         "employment_type": _child_text(item, "type"),
         "tags": _build_tags(category, skills),
         "summary": summary,
-        "content_updated_at": _parse_pub_date(_child_text(item, "pubDate")),
-        "application_deadline": _parse_pub_date(_child_text(item, "expires_at")),
+        "content_updated_at": _parse_rss_date(_child_text(item, "pubDate")),
+        "application_deadline": _parse_rss_date(_child_text(item, "expires_at")),
         "matched_fields": matched_fields,
         "matched_terms": matched_terms,
         "salary_min": "",
@@ -320,7 +320,7 @@ def _extract_company_url(description_html: str) -> str:
     return parser.company_url
 
 
-def _parse_pub_date(raw_value: str) -> str:
+def _parse_rss_date(raw_value: str) -> str:
     raw_value = raw_value.strip()
     if not raw_value:
         return ""
