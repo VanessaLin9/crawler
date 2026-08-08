@@ -86,7 +86,7 @@ class EmailerTests(unittest.TestCase):
         self.assertIn("Worksheet: cake_jobs", body)
         self.assertIn("https://docs.google.com/spreadsheets/d/sheet123/edit", body)
         # 整封信契約為單一 keyword（CLI 每輪 site+keyword 各寄一封），
-        # 頂部已顯示，不在每筆職缺重複 Keyword。
+        # 頂部已顯示，不在每筆職缺重複 Keyword（PR #12）。
         self.assertEqual(body.count("Keyword:"), 1)
         self.assertNotIn("\nKeyword:", body.split("1. Backend Engineer", 1)[1])
 

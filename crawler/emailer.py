@@ -121,8 +121,9 @@ def _build_plain_text_body(
         )
 
     for index, record in enumerate(records, start=1):
-        # 人讀信先完整露出 JobRecord 既有欄位，方便用實際測試信再收斂；
-        # Summary 放最後，多行時仍靠尾端空行維持職缺邊界。
+        # 人讀信先完整露出 JobRecord 既有欄位，方便用實際測試信再收斂（PR #12）。
+        # Summary 放最後，多行時仍靠尾端空行維持職缺邊界；勿截斷或改寫來源 summary。
+        # Keyword 只在信件頂部顯示：CLI 每輪 site+keyword 各寄一封，不在每筆重複。
         lines.extend(
             [
                 f"{index}. {record.title}",
@@ -158,10 +159,12 @@ def _build_plain_text_body(
 
 
 def _format_optional_text(value: str) -> str:
+    # 人讀信空字串統一 N/A，方便比對各 provider 資料完整度（PR #12）。
     return value or "N/A"
 
 
 def _format_optional_list(values: list[str]) -> str:
+    # list 欄位輸出逗號分隔人讀文字，禁止 Python list repr；空 list → N/A（PR #12）。
     if not values:
         return "N/A"
     return ", ".join(values)
