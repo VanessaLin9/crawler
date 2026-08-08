@@ -60,13 +60,35 @@ class EmailerTests(unittest.TestCase):
         )
 
         self.assertIn("New jobs: 1", body)
+        self.assertIn("Keyword: 後端", body)
         self.assertIn("Backend Engineer", body)
         self.assertIn("Company: ACME", body)
+        self.assertIn("Company URL: https://www.cake.me/companies/acme", body)
         self.assertIn("Salary: 100000 - 150000 TWD per_month", body)
+        self.assertIn("Salary min: 100000", body)
+        self.assertIn("Salary max: 150000", body)
+        self.assertIn("Salary currency: TWD", body)
+        self.assertIn("Salary type: per_month", body)
+        self.assertIn("Openings: 2", body)
+        self.assertIn("Management responsibility: none", body)
+        self.assertIn("Tags: Python, Backend", body)
+        self.assertIn("Matched fields: title", body)
+        self.assertIn("Matched terms: backend", body)
+        self.assertIn("Source site: cake", body)
+        self.assertIn(
+            "Search page URL: https://www.cake.me/jobs/%E5%BE%8C%E7%AB%AF/for-it",
+            body,
+        )
+        self.assertIn("Discovered at: 2026-03-22T12:00:00+00:00", body)
+        self.assertIn("Summary: Build backend services", body)
         self.assertIn("Posted on: 2026-03-22T12:00:00Z", body)
         self.assertIn("Apply before: N/A", body)
         self.assertIn("Worksheet: cake_jobs", body)
         self.assertIn("https://docs.google.com/spreadsheets/d/sheet123/edit", body)
+        # 整封信契約為單一 keyword（CLI 每輪 site+keyword 各寄一封），
+        # 頂部已顯示，不在每筆職缺重複 Keyword（PR #12）。
+        self.assertEqual(body.count("Keyword:"), 1)
+        self.assertNotIn("\nKeyword:", body.split("1. Backend Engineer", 1)[1])
 
     def test_build_plain_text_body_includes_posted_on_and_apply_before(self) -> None:
         body = _build_plain_text_body(
@@ -107,6 +129,124 @@ class EmailerTests(unittest.TestCase):
 
         self.assertIn("Posted on: 2026-07-24", body)
         self.assertIn("Apply before: 2026-08-23", body)
+        self.assertIn("Tags: Back-End Programming", body)
+        self.assertIn("Summary: Build APIs", body)
+        self.assertIn("Matched fields: category", body)
+        self.assertIn("Matched terms: Back-End Programming", body)
+
+    def test_build_plain_text_body_formats_lists_and_empty_values(self) -> None:
+        body = _build_plain_text_body(
+            site="wwr",
+            keyword="後端",
+            records=[
+                JobRecord(
+                    job_url="https://weworkremotely.com/remote-jobs/1",
+                    title="Backend Engineer",
+                    company_name="Acme",
+                    company_url="",
+                    keyword="後端",
+                    location="",
+                    salary_min="",
+                    salary_max="",
+                    salary_currency="",
+                    salary_type="",
+                    salary_display="",
+                    openings_count="",
+                    employment_type="",
+                    seniority_level="",
+                    experience_required_years="",
+                    management_responsibility="",
+                    tags="",
+                    matched_fields=["title", "category"],
+                    matched_terms=["backend", "api"],
+                    summary="",
+                    source_site="wwr",
+                    search_page_url="",
+                    content_updated_at="",
+                    discovered_at="",
+                )
+            ],
+            sheet_name="wwr_jobs",
+            spreadsheet_id="sheet123",
+        )
+
+        self.assertIn("Matched fields: title, category", body)
+        self.assertIn("Matched terms: backend, api", body)
+        self.assertNotIn("Matched fields: ['title'", body)
+        self.assertNotIn("Matched terms: ['backend'", body)
+        self.assertIn("Company URL: N/A", body)
+        self.assertIn("Location: N/A", body)
+        self.assertIn("Tags: N/A", body)
+        self.assertIn("Summary: N/A", body)
+        self.assertIn("Openings: N/A", body)
+
+    def test_build_plain_text_body_keeps_boundary_after_multiline_summary(self) -> None:
+        body = _build_plain_text_body(
+            site="wwr",
+            keyword="後端",
+            records=[
+                JobRecord(
+                    job_url="https://weworkremotely.com/remote-jobs/1",
+                    title="First Job",
+                    company_name="Acme",
+                    company_url="",
+                    keyword="後端",
+                    location="",
+                    salary_min="",
+                    salary_max="",
+                    salary_currency="",
+                    salary_type="",
+                    salary_display="",
+                    openings_count="",
+                    employment_type="",
+                    seniority_level="",
+                    experience_required_years="",
+                    management_responsibility="",
+                    tags="Back-End Programming, Python",
+                    matched_fields=[],
+                    matched_terms=[],
+                    summary="Line one\nLine two\nLine three",
+                    source_site="wwr",
+                    search_page_url="https://weworkremotely.com/categories/remote-back-end-programming-jobs.rss",
+                    content_updated_at="",
+                    discovered_at="",
+                ),
+                JobRecord(
+                    job_url="https://weworkremotely.com/remote-jobs/2",
+                    title="Second Job",
+                    company_name="Beta",
+                    company_url="",
+                    keyword="後端",
+                    location="",
+                    salary_min="",
+                    salary_max="",
+                    salary_currency="",
+                    salary_type="",
+                    salary_display="",
+                    openings_count="",
+                    employment_type="",
+                    seniority_level="",
+                    experience_required_years="",
+                    management_responsibility="",
+                    tags="",
+                    matched_fields=[],
+                    matched_terms=[],
+                    summary="Short",
+                    source_site="wwr",
+                    search_page_url="",
+                    content_updated_at="",
+                    discovered_at="",
+                ),
+            ],
+            sheet_name="wwr_jobs",
+            spreadsheet_id="sheet123",
+        )
+
+        self.assertIn("Summary: Line one\nLine two\nLine three", body)
+        self.assertIn("Matched fields: N/A", body)
+        self.assertIn("Matched terms: N/A", body)
+        self.assertIn("\nSummary: Line one\nLine two\nLine three\n\n2. Second Job\n", body)
+        self.assertIn("Tags: Back-End Programming, Python", body)
 
     def test_build_plain_text_body_lists_crawl_issues(self) -> None:
         body = _build_plain_text_body(
