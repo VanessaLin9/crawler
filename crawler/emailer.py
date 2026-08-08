@@ -121,24 +121,50 @@ def _build_plain_text_body(
         )
 
     for index, record in enumerate(records, start=1):
+        # 人讀信先完整露出 JobRecord 既有欄位，方便用實際測試信再收斂；
+        # Summary 放最後，多行時仍靠尾端空行維持職缺邊界。
         lines.extend(
             [
                 f"{index}. {record.title}",
                 f"Company: {record.company_name}",
-                f"Location: {record.location or 'N/A'}",
-                f"Salary: {record.salary_display or 'N/A'}",
-                f"Type: {record.employment_type or 'N/A'}",
-                f"Seniority: {record.seniority_level or 'N/A'}",
-                f"Experience: {record.experience_required_years or 'N/A'}",
+                f"Company URL: {_format_optional_text(record.company_url)}",
+                f"Location: {_format_optional_text(record.location)}",
+                f"Salary: {_format_optional_text(record.salary_display)}",
+                f"Salary min: {_format_optional_text(record.salary_min)}",
+                f"Salary max: {_format_optional_text(record.salary_max)}",
+                f"Salary currency: {_format_optional_text(record.salary_currency)}",
+                f"Salary type: {_format_optional_text(record.salary_type)}",
+                f"Openings: {_format_optional_text(record.openings_count)}",
+                f"Type: {_format_optional_text(record.employment_type)}",
+                f"Seniority: {_format_optional_text(record.seniority_level)}",
+                f"Experience: {_format_optional_text(record.experience_required_years)}",
+                f"Management responsibility: {_format_optional_text(record.management_responsibility)}",
+                f"Tags: {_format_optional_text(record.tags)}",
+                f"Matched fields: {_format_optional_list(record.matched_fields)}",
+                f"Matched terms: {_format_optional_list(record.matched_terms)}",
                 # 共用人讀摘要也露出日期欄（WWR 等站需要；無值則 N/A）。PR #11
-                f"Posted on: {record.content_updated_at or 'N/A'}",
-                f"Apply before: {record.application_deadline or 'N/A'}",
+                f"Posted on: {_format_optional_text(record.content_updated_at)}",
+                f"Apply before: {_format_optional_text(record.application_deadline)}",
+                f"Source site: {_format_optional_text(record.source_site)}",
+                f"Search page URL: {_format_optional_text(record.search_page_url)}",
+                f"Discovered at: {_format_optional_text(record.discovered_at)}",
                 f"URL: {record.job_url}",
+                f"Summary: {_format_optional_text(record.summary)}",
                 "",
             ]
         )
 
     return "\n".join(lines).strip() + "\n"
+
+
+def _format_optional_text(value: str) -> str:
+    return value or "N/A"
+
+
+def _format_optional_list(values: list[str]) -> str:
+    if not values:
+        return "N/A"
+    return ", ".join(values)
 
 
 def _build_json_body(
